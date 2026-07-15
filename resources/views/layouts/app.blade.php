@@ -60,10 +60,14 @@
 
         <nav class="space-y-1">
             @php
+                $navSetting = \App\Models\SheetSetting::current();
                 $links = [
                     ['route' => 'admin.dashboard', 'label' => 'Dashboard', 'icon' => '▤'],
-                    ['route' => 'admin.settings',  'label' => 'Settings',  'icon' => '⚙'],
                 ];
+                if ($navSetting?->source === 'ghl') {
+                    $links[] = ['route' => 'admin.ghl.health', 'label' => 'Data Health', 'icon' => '❤'];
+                }
+                $links[] = ['route' => 'admin.settings', 'label' => 'Settings', 'icon' => '⚙'];
             @endphp
 
             @foreach ($links as $link)
@@ -81,10 +85,17 @@
         </nav>
 
         {{-- CONNECTION STATUS --}}
-        @php $setting = \App\Models\SheetSetting::current(); @endphp
+        @php
+            $setting = \App\Models\SheetSetting::current();
+            $isGhlSource = $setting?->source === 'ghl';
+            $unitCount = $isGhlSource
+                ? count($setting->ghlObjects())
+                : count($setting?->sheet_names ?? []);
+            $unitWord = $isGhlSource ? 'object' : 'tab';
+        @endphp
         <div class="mt-8 pt-5" style="border-top:1px solid var(--sidebar-line);">
             <div class="text-[10.5px] uppercase tracking-[1.5px] mb-3" style="color:#7FA396;">
-                Sheet Status
+                {{ $isGhlSource ? 'GoHighLevel' : 'Sheet' }} Status
             </div>
             <div class="flex items-center gap-2 text-[11.5px]" style="color:#B9CCC4;">
                 <span class="w-[7px] h-[7px] rounded-full shrink-0"
@@ -94,7 +105,7 @@
             </div>
             @if ($setting)
                 <div class="mono text-[10px] mt-2" style="color:#4A6459;">
-                    {{ count($setting->sheet_names) }} {{ Str::plural('tab', count($setting->sheet_names)) }} ·
+                    {{ $unitCount }} {{ Str::plural($unitWord, $unitCount) }} ·
                     synced {{ $setting->last_synced_at?->diffForHumans(short: true) ?? 'never' }}
                 </div>
             @endif

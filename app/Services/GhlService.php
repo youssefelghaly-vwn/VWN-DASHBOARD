@@ -33,11 +33,26 @@ class GhlService implements DataSource
 
     private array $errors = [];
 
+    /** Per-resource timing/row-count captured during the last all() run. */
+    private array $meta = [];
+
     public function __construct(private GhlClient $client) {}
 
     public function label(): string
     {
         return 'GoHighLevel';
+    }
+
+    /** The full catalogue of objects GHL can expose (for the settings UI). */
+    public function availableSheets(): array
+    {
+        return self::SHEETS;
+    }
+
+    /** The objects the admin has chosen to pull; defaults to all of them. */
+    public function selectedSheets(): array
+    {
+        return \App\Models\SheetSetting::current()?->ghlObjects() ?? self::SHEETS;
     }
 
     private function connection(): GhlConnection
@@ -63,28 +78,110 @@ class GhlService implements DataSource
 
         return Cache::remember($key, $ttl, function () use ($connection) {
             $this->errors = [];
+            $this->meta   = [];
+            $startedAt    = hrtime(true);
 
-            // Prerequisites for labelling other sheets.
-            $users     = $this->safe('Users', fn () => $this->fetchUsers($connection), []);
+            $selected = $this->selectedSheets();
+
+            // Only the objects the admin selected are fetched — and their hidden
+            // prerequisites are pulled ONLY when a selected object needs them.
+            // Deselecting Appointments (the slow calendar sweep) or an unused
+            // object removes that whole workload from every dashboard load.
+            $wants          = fn (string $s) => in_array($s, $selected, true);
+            $needsUserNames = $wants('Opportunities') || $wants('Contacts') || $wants('Appointments');
+
+            $users     = ($wants('Users') || $needsUserNames)
+                ? $this->timed('Users', '/users/', fn () => $this->fetchUsers($connection), [])
+                : [];
             $userNames = collect($users)->pluck('Name', '_id')->all();
-            $pipelines = $this->safe('Pipelines', fn () => $this->fetchPipelines($connection), []);
-            $cfMap     = $this->safe('CustomFields', fn () => $this->fetchCustomFieldMap($connection), []);
 
-            $payload = [
-                'Opportunities' => $this->safe('Opportunities', fn () => $this->fetchOpportunities($connection, $pipelines, $userNames), []),
-                'Contacts'      => $this->safe('Contacts', fn () => $this->fetchContacts($connection, $userNames, $cfMap), []),
-                'Appointments'  => $this->safe('Appointments', fn () => $this->fetchAppointments($connection, $userNames), []),
-                'Users'         => array_map(fn ($u) => collect($u)->except('_id')->all(), $users),
-            ];
+            $pipelines = $wants('Opportunities')
+                ? $this->timed('Pipelines', '/opportunities/pipelines', fn () => $this->fetchPipelines($connection), [])
+                : [];
+
+            $cfMap = $wants('Contacts')
+                ? $this->timed('CustomFields', '/locations/{id}/customFields', fn () => $this->fetchCustomFieldMap($connection), [])
+                : [];
+
+            $payload = [];
+
+            if ($wants('Opportunities')) {
+                $payload['Opportunities'] = $this->timed('Opportunities', '/opportunities/search', fn () => $this->fetchOpportunities($connection, $pipelines, $userNames), []);
+            }
+
+            if ($wants('Contacts')) {
+                $payload['Contacts'] = $this->timed('Contacts', '/contacts/', fn () => $this->fetchContacts($connection, $userNames, $cfMap), []);
+            }
+
+            if ($wants('Appointments')) {
+                $payload['Appointments'] = $this->timed('Appointments', '/calendars/events', fn () => $this->fetchAppointments($connection, $userNames), []);
+            }
+
+            if ($wants('Users')) {
+                $payload['Users'] = array_map(fn ($u) => collect($u)->except('_id')->all(), $users);
+            }
 
             if ($this->errors) {
                 $payload['_errors'] = $this->errors;
             }
 
+            $payload['_meta'] = [
+                'selected'  => array_values($selected),
+                'resources' => $this->meta,
+                'total_ms'  => (int) round((hrtime(true) - $startedAt) / 1e6),
+                'ran_at'    => now()->toIso8601String(),
+            ];
+
+            // Durable copy so Settings / Data Health can show the last-sync
+            // timings WITHOUT triggering a fresh fetch on page load.
+            Cache::put($this->metaCacheKey($connection), $payload['_meta'], now()->addDay());
+
             $connection->forceFill(['last_synced_at' => now()])->save();
 
             return $payload;
         });
+    }
+
+    private function metaCacheKey(GhlConnection $connection): string
+    {
+        return 'ghl:'.$connection->id.':meta';
+    }
+
+    /**
+     * Last-sync timings/row-counts, read from the durable meta cache so it does
+     * NOT provoke a fetch. Returns [] until the first sync has run.
+     */
+    public function lastMeta(): array
+    {
+        $connection = GhlConnection::current();
+
+        if (! $connection) {
+            return [];
+        }
+
+        return Cache::get($this->metaCacheKey($connection), []);
+    }
+
+    /**
+     * safe() + a stopwatch. Records ms, row count, ok/error and the endpoint
+     * per resource so the Data Health view can show exactly what was called and
+     * how long it took.
+     */
+    private function timed(string $resource, string $endpoint, callable $fn, mixed $fallback): mixed
+    {
+        $startedAt = hrtime(true);
+        $result    = $this->safe($resource, $fn, $fallback);
+        $ms        = (int) round((hrtime(true) - $startedAt) / 1e6);
+
+        $this->meta[$resource] = [
+            'ok'       => ! isset($this->errors[$resource]),
+            'ms'       => $ms,
+            'count'    => is_array($result) ? count($result) : 0,
+            'endpoint' => $endpoint,
+            'error'    => $this->errors[$resource] ?? null,
+        ];
+
+        return $result;
     }
 
     private function safe(string $resource, callable $fn, mixed $fallback): mixed
@@ -109,7 +206,7 @@ class GhlService implements DataSource
         $out = [];
 
         foreach ($this->all() as $sheet => $rows) {
-            if ($sheet === '_errors' || ! is_array($rows)) {
+            if (in_array($sheet, ['_errors', '_meta'], true) || ! is_array($rows)) {
                 continue;
             }
 

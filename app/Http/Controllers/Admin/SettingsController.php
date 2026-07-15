@@ -33,7 +33,16 @@ class SettingsController extends Controller
             $rules['sheet_names']  = ['required', 'string'];
         }
 
-        $data = $request->validate($rules);
+        if ($source === 'ghl') {
+            // Which GHL objects to pull. At least one; only real objects allowed.
+            $rules['ghl_objects']   = ['required', 'array', 'min:1'];
+            $rules['ghl_objects.*'] = ['string', 'in:'.implode(',', \App\Services\GhlService::SHEETS)];
+        }
+
+        $data = $request->validate($rules, [
+            'ghl_objects.required' => 'Select at least one object to pull.',
+            'ghl_objects.min'      => 'Select at least one object to pull.',
+        ]);
 
         $names = $source === 'sheets'
             ? collect(explode(',', $data['sheet_names']))->map(fn ($n) => trim($n))->filter()->unique()->values()->all()
@@ -56,6 +65,14 @@ class SettingsController extends Controller
         if ($source === 'sheets') {
             $setting->endpoint_url = $data['endpoint_url'];
             $setting->sheet_names  = $names;
+        }
+
+        if ($source === 'ghl') {
+            // Store in canonical order so the selection reads consistently.
+            $setting->ghl_objects = collect(\App\Services\GhlService::SHEETS)
+                ->filter(fn ($sheet) => in_array($sheet, $data['ghl_objects'], true))
+                ->values()
+                ->all();
         }
 
         $setting->save();
