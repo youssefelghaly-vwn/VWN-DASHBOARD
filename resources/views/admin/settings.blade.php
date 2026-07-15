@@ -85,40 +85,108 @@
                     @include('admin.partials.ghl-token-form', ['ghl' => $ghl])
                 </details>
 
-                {{-- Available data --}}
-                <div class="rounded-xl p-5" style="background:var(--panel);border:1px solid var(--line);">
-                    <span class="text-[10.5px] font-bold uppercase tracking-[1.5px] block mb-3" style="color:var(--ink-soft);">
-                        Available data
-                    </span>
-                    <p class="text-xs mb-3" style="color:var(--ink-soft);">
-                        These become selectable "sheets" in the chart and metric builders.
-                    </p>
-                    <div class="flex flex-wrap gap-2">
-                        @foreach (\App\Services\GhlService::SHEETS as $name)
-                            <span class="mono text-[11px] px-3 py-1.5 rounded-full"
-                                  style="background:rgba(79,227,166,0.16);color:var(--mint-deep);">{{ $name }}</span>
-                        @endforeach
-                    </div>
-                </div>
+                {{-- Objects to pull + Cache TTL --}}
+                @php
+                    $selectedObjects = $setting?->ghlObjects() ?? \App\Services\GhlService::SHEETS;
+                    $ghlMeta = app(\App\Services\GhlService::class)->lastMeta();
+                    $ghlResources = $ghlMeta['resources'] ?? [];
+                    $maxMs = collect($ghlResources)->max('ms') ?: 1;
+                @endphp
 
-                {{-- Cache TTL --}}
                 <form method="POST" action="{{ route('admin.settings.update') }}"
-                      class="rounded-xl p-5" style="background:var(--panel);border:1px solid var(--line);">
+                      class="rounded-xl p-5 space-y-6" style="background:var(--panel);border:1px solid var(--line);">
                     @csrf @method('PUT')
                     <input type="hidden" name="source" value="ghl">
-                    <label class="block text-sm font-semibold mb-1.5">Cache refresh (seconds)</label>
-                    <div class="flex items-center gap-3">
+
+                    {{-- OBJECT SELECTION --}}
+                    <div>
+                        <span class="text-[10.5px] font-bold uppercase tracking-[1.5px] block mb-1" style="color:var(--mint-deep);">
+                            Objects to pull
+                        </span>
+                        <p class="text-xs mb-3" style="color:var(--ink-soft);">
+                            Only the objects you check are fetched from GoHighLevel and shown in the
+                            chart, metric, and table builders. Fewer objects = a faster dashboard —
+                            <b>Appointments</b> is the heaviest (it sweeps every calendar).
+                        </p>
+
+                        <div class="flex flex-wrap gap-2">
+                            @foreach (\App\Services\GhlService::SHEETS as $name)
+                                @php $isOn = in_array($name, old('ghl_objects', $selectedObjects), true); @endphp
+                                <label x-data="{ on: {{ $isOn ? 'true' : 'false' }} }"
+                                       class="mono text-[11px] px-3 py-1.5 rounded-full cursor-pointer select-none transition flex items-center gap-1.5"
+                                       :style="on
+                                           ? 'background:var(--mint-deep);color:#fff;'
+                                           : 'background:var(--panel-alt);color:var(--ink-soft);border:1px solid var(--line);'">
+                                    <input type="checkbox" name="ghl_objects[]" value="{{ $name }}"
+                                           x-model="on" class="hidden">
+                                    <span x-text="on ? '✓' : '＋'" class="text-[10px] leading-none"></span>
+                                    {{ $name }}
+                                </label>
+                            @endforeach
+                        </div>
+
+                        @error('ghl_objects')
+                            <p class="text-xs mt-2" style="color:var(--coral);">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    {{-- CACHE TTL --}}
+                    <div class="pt-5" style="border-top:1px solid var(--line);">
+                        <label class="block text-sm font-semibold mb-1.5">Cache refresh (seconds)</label>
                         <input name="cache_ttl" type="number" min="0" max="3600"
                                value="{{ old('cache_ttl', $setting->cache_ttl ?? 60) }}"
                                class="w-40 rounded-lg text-sm px-3 py-2.5"
                                style="border:1px solid var(--line);background:var(--panel-alt);">
-                        <button class="px-4 py-2.5 rounded-lg text-sm font-semibold text-white"
-                                style="background:var(--mint-deep);">Save</button>
+                        <p class="text-xs mt-1.5" style="color:var(--ink-soft);">
+                            How long GHL data is held before re-fetching. Higher = fewer API calls.
+                        </p>
                     </div>
-                    <p class="text-xs mt-1.5" style="color:var(--ink-soft);">
-                        How long GHL data is held before re-fetching. Higher = fewer API calls.
-                    </p>
+
+                    <button class="px-4 py-2.5 rounded-lg text-sm font-semibold text-white"
+                            style="background:var(--mint-deep);">Save changes</button>
                 </form>
+
+                {{-- SYNC HEALTH SUMMARY --}}
+                <div class="rounded-xl p-5" style="background:var(--panel);border:1px solid var(--line);">
+                    <div class="flex items-center justify-between mb-3">
+                        <span class="text-[10.5px] font-bold uppercase tracking-[1.5px]" style="color:var(--ink-soft);">
+                            Last sync — time per object
+                        </span>
+                        <a href="{{ route('admin.ghl.health') }}"
+                           class="text-xs font-semibold" style="color:var(--mint-deep);">Data Health →</a>
+                    </div>
+
+                    @if ($ghlResources)
+                        <div class="space-y-2">
+                            @foreach ($ghlResources as $resource => $info)
+                                <div class="flex items-center gap-3">
+                                    <span class="w-2 h-2 rounded-full shrink-0"
+                                          style="background:{{ ($info['ok'] ?? false) ? 'var(--mint)' : 'var(--coral)' }};"></span>
+                                    <span class="text-xs w-32 shrink-0 truncate">{{ $resource }}</span>
+                                    <div class="flex-1 h-2 rounded-full overflow-hidden" style="background:var(--panel-alt);">
+                                        <div class="h-full rounded-full"
+                                             style="width:{{ max(3, round(($info['ms'] ?? 0) / $maxMs * 100)) }}%;background:var(--mint-deep);"></div>
+                                    </div>
+                                    <span class="mono text-[11px] w-20 text-right shrink-0" style="color:var(--ink-soft);">
+                                        {{ number_format($info['ms'] ?? 0) }} ms
+                                    </span>
+                                    <span class="mono text-[11px] w-16 text-right shrink-0" style="color:var(--ink-soft);">
+                                        {{ number_format($info['count'] ?? 0) }} rows
+                                    </span>
+                                </div>
+                            @endforeach
+                        </div>
+                        <p class="mono text-[11px] mt-3" style="color:var(--ink-soft);">
+                            Total {{ number_format($ghlMeta['total_ms'] ?? 0) }} ms
+                            @if (!empty($ghlMeta['ran_at']))· {{ \Illuminate\Support\Carbon::parse($ghlMeta['ran_at'])->diffForHumans() }}@endif
+                        </p>
+                    @else
+                        <p class="text-xs" style="color:var(--ink-soft);">
+                            No timing data yet. Open <a href="{{ route('admin.ghl.health') }}" class="underline" style="color:var(--mint-deep);">Data Health</a>
+                            and run a sync to see how long each object takes.
+                        </p>
+                    @endif
+                </div>
             @else
                 {{-- NOT CONNECTED — paste token --}}
                 <div class="rounded-xl p-6" style="background:var(--panel);border:1px solid var(--line);">

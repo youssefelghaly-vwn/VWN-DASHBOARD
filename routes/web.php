@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\ChartController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\GhlConnectionController;
 use App\Http\Controllers\Admin\GhlDiagnosticController;
+use App\Http\Controllers\Admin\GhlHealthController;
 use App\Http\Controllers\Admin\MetricController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\ProfileController;
@@ -32,6 +33,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     Route::post('/ghl',   [GhlConnectionController::class, 'store'])->name('ghl.store');
     Route::delete('/ghl', [GhlConnectionController::class, 'destroy'])->name('ghl.disconnect');
+    Route::get('/ghl/health', GhlHealthController::class)->name('ghl.health');
     Route::get('/ghl/diagnose', GhlDiagnosticController::class)->name('ghl.diagnose');
 
 });
