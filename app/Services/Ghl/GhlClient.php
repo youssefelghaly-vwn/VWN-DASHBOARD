@@ -44,15 +44,15 @@ class GhlClient
 
             throw new RuntimeException(
                 "GoHighLevel returned 401 on {$path}. GHL says: "
-                .(is_string($body) ? $body : json_encode($body))
-                .' — this endpoint likely needs a scope that wasn\'t granted to the private integration.'
+                    . (is_string($body) ? $body : json_encode($body))
+                    . ' — this endpoint likely needs a scope that wasn\'t granted to the private integration.'
             );
         }
 
         if ($response->failed()) {
             throw new RuntimeException(
-                "GHL API error on {$path} (HTTP ".$response->status().'): '
-                .($response->json('message') ? json_encode($response->json('message')) : $response->body())
+                "GHL API error on {$path} (HTTP " . $response->status() . '): '
+                    . ($response->json('message') ? json_encode($response->json('message')) : $response->body())
             );
         }
 
@@ -80,6 +80,8 @@ class GhlClient
             $query[$limitParam] = $pageSize;
         }
 
+        $lastCursor = null;
+
         for ($page = 0; $page < $maxPages; $page++) {
             $body  = $this->get($connection, $path, $query);
             $chunk = $body[$collectionKey] ?? [];
@@ -90,12 +92,29 @@ class GhlClient
 
             array_push($out, ...$chunk);
 
+            // Terminate if this page came back short — no full page means last page.
+            if (count($chunk) < $pageSize) {
+                break;
+            }
+
             $meta         = $body['meta'] ?? [];
             $startAfter   = $meta['startAfter']   ?? null;
             $startAfterId = $meta['startAfterId'] ?? null;
             $nextPageUrl  = $meta['nextPageUrl']  ?? null;
 
+            // No next page signalled → done.
+            if (! $nextPageUrl && ! $startAfterId) {
+                break;
+            }
+
             if ($startAfterId) {
+                // Cursor didn't advance → GHL is echoing the last page. Stop.
+                $cursor = $startAfterId . '|' . $startAfter;
+                if ($cursor === $lastCursor) {
+                    break;
+                }
+                $lastCursor = $cursor;
+
                 $query['startAfterId'] = $startAfterId;
                 if ($startAfter) {
                     $query['startAfter'] = $startAfter;

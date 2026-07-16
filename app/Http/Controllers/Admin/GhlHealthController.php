@@ -27,12 +27,9 @@ class GhlHealthController extends Controller
         $error = null;
 
         if ($request->boolean('refresh') && $connection && $isGhl) {
-            try {
-                $ghl->all(fresh: true);
-            } catch (\Throwable $e) {
-                $error = $e->getMessage();
-            }
+            $ghl->ensureFresh();
         }
+
 
         $meta = ($connection && $isGhl) ? $ghl->lastMeta() : [];
 
@@ -43,6 +40,8 @@ class GhlHealthController extends Controller
             'available'  => $ghl->availableSheets(),
             'selected'   => $connection ? $ghl->selectedSheets() : [],
             'error'      => $error,
+            'syncing'    => ($connection && $isGhl) ? $ghl->isSyncing() : false,
+
         ]);
     }
 }

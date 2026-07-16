@@ -69,82 +69,136 @@ class GhlService implements DataSource
     public function all(bool $fresh = false): array
     {
         $connection = $this->connection();
-        $key        = 'ghl:'.$connection->id.':all';
+        $key        = 'ghl:' . $connection->id . ':all';
         $ttl        = optional(\App\Models\SheetSetting::current())->cache_ttl ?? 60;
 
+        // The live, blocking fetch path. ONLY the queued SyncGhlJob passes
+        // fresh:true — a web request must never take this branch, because a full
+        // sync is far longer than any HTTP timeout allows.
         if ($fresh) {
             Cache::forget($key);
+
+            // Cache::remember with the real fetch closure. Store for the FULL day
+            // rather than the short display TTL: the job is what refreshes data,
+            // so the cache should outlive the TTL and only be replaced by the next
+            // job run. This is what makes the dashboard non-blocking.
+            return Cache::remember($key, now()->addDay(), function () use ($connection) {
+                return $this->runSync($connection);
+            });
         }
 
-        return Cache::remember($key, $ttl, function () use ($connection) {
-            $this->errors = [];
-            $this->meta   = [];
-            $startedAt    = hrtime(true);
+        // The web path: read-only. If we have data, serve it. If not, kick off a
+        // background sync and hand back a valid empty payload so the page renders.
+        $cached = Cache::get($key);
 
-            $selected = $this->selectedSheets();
+        if (is_array($cached)) {
+            return $cached;
+        }
 
-            // Only the objects the admin selected are fetched — and their hidden
-            // prerequisites are pulled ONLY when a selected object needs them.
-            // Deselecting Appointments (the slow calendar sweep) or an unused
-            // object removes that whole workload from every dashboard load.
-            $wants          = fn (string $s) => in_array($s, $selected, true);
-            $needsUserNames = $wants('Opportunities') || $wants('Contacts') || $wants('Appointments');
+        $this->ensureFresh();
 
-            $users     = ($wants('Users') || $needsUserNames)
-                ? $this->timed('Users', '/users/', fn () => $this->fetchUsers($connection), [])
-                : [];
-            $userNames = collect($users)->pluck('Name', '_id')->all();
+        return [
+            '_meta' => [
+                'selected'  => array_values($this->selectedSheets()),
+                'resources' => [],
+                'total_ms'  => 0,
+                'ran_at'    => null,
+                'syncing'   => true,
+            ],
+        ];
+    }
 
-            $pipelines = $wants('Opportunities')
-                ? $this->timed('Pipelines', '/opportunities/pipelines', fn () => $this->fetchPipelines($connection), [])
-                : [];
+    /**
+     * The actual fetch work, extracted from the old all() body so both the job
+     * (via fresh:true) and any future manual call share one implementation.
+     */
+    private function runSync(GhlConnection $connection): array
+    {
+        $this->errors = [];
+        $this->meta   = [];
+        $startedAt    = hrtime(true);
 
-            $cfMap = $wants('Contacts')
-                ? $this->timed('CustomFields', '/locations/{id}/customFields', fn () => $this->fetchCustomFieldMap($connection), [])
-                : [];
+        $selected = $this->selectedSheets();
 
-            $payload = [];
+        $wants          = fn(string $s) => in_array($s, $selected, true);
+        $needsUserNames = $wants('Opportunities') || $wants('Contacts') || $wants('Appointments');
 
-            if ($wants('Opportunities')) {
-                $payload['Opportunities'] = $this->timed('Opportunities', '/opportunities/search', fn () => $this->fetchOpportunities($connection, $pipelines, $userNames), []);
-            }
+        $users     = ($wants('Users') || $needsUserNames)
+            ? $this->timed('Users', '/users/', fn() => $this->fetchUsers($connection), [])
+            : [];
+        $userNames = collect($users)->pluck('Name', '_id')->all();
 
-            if ($wants('Contacts')) {
-                $payload['Contacts'] = $this->timed('Contacts', '/contacts/', fn () => $this->fetchContacts($connection, $userNames, $cfMap), []);
-            }
+        $pipelines = $wants('Opportunities')
+            ? $this->timed('Pipelines', '/opportunities/pipelines', fn() => $this->fetchPipelines($connection), [])
+            : [];
 
-            if ($wants('Appointments')) {
-                $payload['Appointments'] = $this->timed('Appointments', '/calendars/events', fn () => $this->fetchAppointments($connection, $userNames), []);
-            }
+        $cfMap = $wants('Contacts')
+            ? $this->timed('CustomFields', '/locations/{id}/customFields', fn() => $this->fetchCustomFieldMap($connection), [])
+            : [];
 
-            if ($wants('Users')) {
-                $payload['Users'] = array_map(fn ($u) => collect($u)->except('_id')->all(), $users);
-            }
+        $payload = [];
 
-            if ($this->errors) {
-                $payload['_errors'] = $this->errors;
-            }
+        if ($wants('Opportunities')) {
+            $payload['Opportunities'] = $this->timed('Opportunities', '/opportunities/search', fn() => $this->fetchOpportunities($connection, $pipelines, $userNames), []);
+        }
 
-            $payload['_meta'] = [
-                'selected'  => array_values($selected),
-                'resources' => $this->meta,
-                'total_ms'  => (int) round((hrtime(true) - $startedAt) / 1e6),
-                'ran_at'    => now()->toIso8601String(),
-            ];
+        if ($wants('Contacts')) {
+            $payload['Contacts'] = $this->timed('Contacts', '/contacts/', fn() => $this->fetchContacts($connection, $userNames, $cfMap), []);
+        }
 
-            // Durable copy so Settings / Data Health can show the last-sync
-            // timings WITHOUT triggering a fresh fetch on page load.
-            Cache::put($this->metaCacheKey($connection), $payload['_meta'], now()->addDay());
+        if ($wants('Appointments')) {
+            $payload['Appointments'] = $this->timed('Appointments', '/calendars/events', fn() => $this->fetchAppointments($connection, $userNames), []);
+        }
 
-            $connection->forceFill(['last_synced_at' => now()])->save();
+        if ($wants('Users')) {
+            $payload['Users'] = array_map(fn($u) => collect($u)->except('_id')->all(), $users);
+        }
 
-            return $payload;
-        });
+        if ($this->errors) {
+            $payload['_errors'] = $this->errors;
+        }
+
+        $payload['_meta'] = [
+            'selected'  => array_values($selected),
+            'resources' => $this->meta,
+            'total_ms'  => (int) round((hrtime(true) - $startedAt) / 1e6),
+            'ran_at'    => now()->toIso8601String(),
+            'syncing'   => false,
+        ];
+
+        Cache::put($this->metaCacheKey($connection), $payload['_meta'], now()->addDay());
+
+        $connection->forceFill(['last_synced_at' => now()])->save();
+
+        return $payload;
+    }
+
+    /**
+     * Dispatch a background sync unless one is already queued/running. Cheap to
+     * call on every page load — ShouldBeUnique on the job dedupes.
+     */
+    public function ensureFresh(): void
+    {
+        if ($connection = GhlConnection::current()) {
+            \App\Jobs\SyncGhlJob::dispatch($connection->id);
+        }
+    }
+
+    /** True while a sync has been requested but not yet written fresh data. */
+    public function isSyncing(): bool
+    {
+        $connection = GhlConnection::current();
+
+        if (! $connection) {
+            return false;
+        }
+
+        return ! Cache::has('ghl:' . $connection->id . ':all');
     }
 
     private function metaCacheKey(GhlConnection $connection): string
     {
-        return 'ghl:'.$connection->id.':meta';
+        return 'ghl:' . $connection->id . ':meta';
     }
 
     /**
@@ -245,9 +299,9 @@ class GhlService implements DataSource
             'locationId' => $c->location_id,
         ]);
 
-        return array_map(fn ($u) => [
+        return array_map(fn($u) => [
             '_id'   => $u['id'] ?? null,
-            'Name'  => $this->str(trim(($u['firstName'] ?? '').' '.($u['lastName'] ?? '')) ?: ($u['name'] ?? '—')),
+            'Name'  => $this->str(trim(($u['firstName'] ?? '') . ' ' . ($u['lastName'] ?? '')) ?: ($u['name'] ?? '—')),
             'Email' => $this->str($u['email'] ?? ''),
             'Role'  => $this->str($u['roles']['role'] ?? ($u['role'] ?? '')),
         ], $rows);
@@ -279,7 +333,7 @@ class GhlService implements DataSource
      */
     private function fetchCustomFieldMap(GhlConnection $c): array
     {
-        $body = $this->client->get($c, '/locations/'.$c->location_id.'/customFields');
+        $body = $this->client->get($c, '/locations/' . $c->location_id . '/customFields');
 
         // GHL usually returns { "customFields": [ { id, name, fieldKey, ... } ] }
         $defs = $body['customFields'] ?? $body['customField'] ?? [];
@@ -353,7 +407,7 @@ class GhlService implements DataSource
 
         return array_map(function ($ct) use ($userNames, $cfMap) {
             $base = [
-                'Name'          => $this->str($ct['contactName'] ?? trim(($ct['firstName'] ?? '').' '.($ct['lastName'] ?? '')) ?: '—'),
+                'Name'          => $this->str($ct['contactName'] ?? trim(($ct['firstName'] ?? '') . ' ' . ($ct['lastName'] ?? '')) ?: '—'),
                 'Email'         => $this->str($ct['email'] ?? ''),
                 'Phone'         => $this->str($ct['phone'] ?? ''),
                 'Company'       => $this->str($ct['companyName'] ?? ''),
@@ -398,8 +452,8 @@ class GhlService implements DataSource
 
         foreach ($calendars as $cal) {
             $events = $this->safe(
-                'Appointments:'.($cal['name'] ?? $cal['id'] ?? '?'),
-                fn () => $this->client->paginate($c, '/calendars/events', 'events', [
+                'Appointments:' . ($cal['name'] ?? $cal['id'] ?? '?'),
+                fn() => $this->client->paginate($c, '/calendars/events', 'events', [
                     'locationId' => $c->location_id,
                     'calendarId' => $cal['id'] ?? null,
                     'startTime'  => now()->subDays($back)->getTimestampMs(),
@@ -428,11 +482,11 @@ class GhlService implements DataSource
     {
         if (is_array($v)) {
             $flat = array_map(
-                fn ($x) => is_scalar($x) ? (string) $x : json_encode($x),
+                fn($x) => is_scalar($x) ? (string) $x : json_encode($x),
                 $v
             );
 
-            return implode(', ', array_filter($flat, fn ($x) => $x !== ''));
+            return implode(', ', array_filter($flat, fn($x) => $x !== ''));
         }
 
         if (is_bool($v)) {
