@@ -21,6 +21,11 @@ return [
     'timeout'         => env('GHL_TIMEOUT', 30),
     'connect_timeout' => env('GHL_CONNECT_TIMEOUT', 10),
 
+    // Extra attempts after a low-level connection failure (cURL 28 timeout,
+    // dropped socket). GHL's list endpoints occasionally stall on a single
+    // page; one retry usually clears it instead of failing the whole object.
+    'retries' => env('GHL_RETRIES', 2),
+
     // Appointments sweep controls — keep the calendar-events workload bounded.
     'max_calendars'      => env('GHL_MAX_CALENDARS', 15),   // calendars per sync
     'events_days_back'   => env('GHL_EVENTS_DAYS_BACK', 90),

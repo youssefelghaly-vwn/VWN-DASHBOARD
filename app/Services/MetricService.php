@@ -69,7 +69,26 @@ class MetricService
 
     public function computeSimple(array $cfg): float
     {
-        $rows  = $this->sources->active()->sheet($cfg['sheet'] ?? '');
+        $source = $this->sources->active();
+
+        // Fast path: an unfiltered contact count is exactly GHL's server-side
+        // `total`, which the last sync cached as a single integer. Answer from
+        // that instead of loading every contact row just to count it. Anything
+        // filtered, or any other aggregate, still runs over the rows below so
+        // the result stays identical to the generic path.
+        if (
+            $source instanceof \App\Services\GhlService
+            && ($cfg['sheet'] ?? '') === 'Contacts'
+            && empty($cfg['filter_column'])
+            && in_array($cfg['agg'] ?? 'count', ['count', 'count_if'], true)
+        ) {
+            $cached = $source->contactsTotal();
+            if ($cached !== null) {
+                return (float) $cached;
+            }
+        }
+
+        $rows  = $source->sheet($cfg['sheet'] ?? '');
         $total = count($rows);
 
         $matched = $this->applyFilter($rows, $cfg);
