@@ -143,7 +143,7 @@ class GhlService implements DataSource
         }
 
         if ($wants('Contacts')) {
-            $payload['Contacts'] = $this->timed('Contacts', '/contacts/', fn() => $this->fetchContacts($connection, $userNames, $cfMap), []);
+            $payload['Contacts'] = $this->timed('Contacts', '/contacts/search', fn() => $this->fetchContacts($connection, $userNames, $cfMap), []);
         }
 
         if ($wants('Appointments')) {
@@ -399,41 +399,146 @@ class GhlService implements DataSource
         }, $rows);
     }
 
+    /**
+     * Contacts, fetched incrementally via /contacts/search.
+     *
+     * A durable per-connection snapshot of RAW contacts (keyed by id) is kept
+     * in the cache. Each sync pulls only contacts updated since the last run's
+     * watermark and merges them over the snapshot, so only the very first sync
+     * walks the whole list — later syncs are cheap and never approach the HTTP
+     * timeout that the old GET /contacts/ pagination hit.
+     *
+     * Note: hard-deletes in GHL aren't observed by a delta pull, so a stale row
+     * can linger until the snapshot expires (7 days) and a full rebuild runs.
+     */
     private function fetchContacts(GhlConnection $c, array $userNames, array $cfMap): array
     {
-        $rows = $this->client->paginate($c, '/contacts/', 'contacts', [
-            'locationId' => $c->location_id,
-        ], ['limitParam' => 'limit']);
+        $snapshotKey  = $this->contactsSnapshotKey($c);
+        $watermarkKey = $this->contactsWatermarkKey($c);
 
-        return array_map(function ($ct) use ($userNames, $cfMap) {
-            $base = [
-                'Name'          => $this->str($ct['contactName'] ?? trim(($ct['firstName'] ?? '') . ' ' . ($ct['lastName'] ?? '')) ?: '—'),
-                'Email'         => $this->str($ct['email'] ?? ''),
-                'Phone'         => $this->str($ct['phone'] ?? ''),
-                'Company'       => $this->str($ct['companyName'] ?? ''),
-                'Type'          => $this->str($ct['type'] ?? ''),
-                'Tags'          => $this->str($ct['tags'] ?? []),
-                'Source'        => $this->str($ct['source'] ?? ''),
-                'Assigned User' => $this->str($userNames[$ct['assignedTo'] ?? null] ?? 'Unassigned'),
-                'Created'       => $this->date($ct['dateAdded'] ?? null),
-            ];
+        $stored    = Cache::get($snapshotKey);
+        $stored    = is_array($stored) ? $stored : [];
+        $watermark = Cache::get($watermarkKey);
 
-            // Resolve custom-field IDs → readable names. Skip anything the
-            // definitions map doesn't know (deleted/archived fields), so no
-            // cryptic IDs ever appear as columns.
-            foreach ($ct['customFields'] ?? [] as $cf) {
-                $id   = $cf['id'] ?? null;
-                $name = $id ? ($cfMap[$id] ?? null) : null;
+        // Incremental only once we already hold a snapshot; otherwise full pull.
+        $sinceMs = ($stored && is_int($watermark)) ? $watermark : null;
 
-                if ($name === null) {
-                    continue;
-                }
+        $result  = $this->client->searchContacts($c, $sinceMs);
+        $fetched = $result['contacts'];
 
-                $base[$this->str($name)] = $this->str($cf['value'] ?? '');
+        $merged = $stored;
+        $maxWm  = is_int($watermark) ? $watermark : 0;
+
+        foreach ($fetched as $ct) {
+            $id = $ct['id'] ?? null;
+            if (! $id) {
+                continue;
+            }
+            $merged[$id] = $ct;
+            $maxWm       = max($maxWm, $this->contactUpdatedMs($ct));
+        }
+
+        // `total` reflects the location's true contact count; fall back to the
+        // snapshot size if GHL omitted it.
+        $total = max((int) $result['total'], count($merged));
+
+        Cache::put($snapshotKey, $merged, now()->addDays(7));
+        Cache::put($this->contactsTotalKey($c), $total, now()->addDays(7));
+        if ($maxWm > 0) {
+            Cache::put($watermarkKey, $maxWm, now()->addDays(7));
+        }
+
+        return array_map(
+            fn ($ct) => $this->transformContact($ct, $userNames, $cfMap),
+            array_values($merged)
+        );
+    }
+
+    /** Shape one raw GHL contact into the display row used by charts/metrics. */
+    private function transformContact(array $ct, array $userNames, array $cfMap): array
+    {
+        $base = [
+            'Name'          => $this->str($ct['contactName'] ?? trim(($ct['firstName'] ?? '') . ' ' . ($ct['lastName'] ?? '')) ?: '—'),
+            'Email'         => $this->str($ct['email'] ?? ''),
+            'Phone'         => $this->str($ct['phone'] ?? ''),
+            'Company'       => $this->str($ct['companyName'] ?? ''),
+            'Type'          => $this->str($ct['type'] ?? ''),
+            'Tags'          => $this->str($ct['tags'] ?? []),
+            'Source'        => $this->str($ct['source'] ?? ''),
+            'Assigned User' => $this->str($userNames[$ct['assignedTo'] ?? null] ?? 'Unassigned'),
+            'Created'       => $this->date($ct['dateAdded'] ?? null),
+        ];
+
+        // Resolve custom-field IDs → readable names. Skip anything the
+        // definitions map doesn't know (deleted/archived fields), so no
+        // cryptic IDs ever appear as columns.
+        foreach ($ct['customFields'] ?? [] as $cf) {
+            $id   = $cf['id'] ?? null;
+            $name = $id ? ($cfMap[$id] ?? null) : null;
+
+            if ($name === null) {
+                continue;
             }
 
-            return $base;
-        }, $rows);
+            $base[$this->str($name)] = $this->str($cf['value'] ?? '');
+        }
+
+        return $base;
+    }
+
+    /** Same tolerant epoch-ms parse the client uses, for watermark tracking. */
+    private function contactUpdatedMs(array $ct): int
+    {
+        $raw = $ct['dateUpdated'] ?? $ct['dateAdded'] ?? null;
+
+        if ($raw === null || $raw === '') {
+            return 0;
+        }
+
+        if (is_numeric($raw)) {
+            return (int) $raw;
+        }
+
+        try {
+            return (int) \Illuminate\Support\Carbon::parse($raw)->getTimestampMs();
+        } catch (\Throwable) {
+            return 0;
+        }
+    }
+
+    private function contactsSnapshotKey(GhlConnection $c): string
+    {
+        return 'ghl:' . $c->id . ':contacts_raw';
+    }
+
+    private function contactsWatermarkKey(GhlConnection $c): string
+    {
+        return 'ghl:' . $c->id . ':contacts_wm';
+    }
+
+    private function contactsTotalKey(GhlConnection $c): string
+    {
+        return 'ghl:' . $c->id . ':contacts_total';
+    }
+
+    /**
+     * The location's total contact count as recorded by the last sync — read
+     * from cache only, so it NEVER triggers a live fetch on the web path.
+     * Returns null when no sync has populated it yet, letting callers fall back
+     * to row counting. This lets a plain "count" metric on Contacts resolve
+     * from a single cached integer instead of materialising every row.
+     */
+    public function contactsTotal(): ?int
+    {
+        $connection = GhlConnection::current();
+
+        if (! $connection) {
+            return null;
+        }
+
+        $total = Cache::get($this->contactsTotalKey($connection));
+
+        return is_int($total) ? $total : null;
     }
 
     private function fetchAppointments(GhlConnection $c, array $userNames): array

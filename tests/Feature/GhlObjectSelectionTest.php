@@ -36,13 +36,22 @@ class RecordingGhlClient extends GhlClient
         $this->calls[] = $path;
 
         return match ($collectionKey) {
-            'users'    => [['id' => 'u1', 'firstName' => 'Ann', 'lastName' => 'Lee', 'email' => 'a@x.com']],
-            'contacts' => [
-                ['firstName' => 'Bob', 'email' => 'b@x.com', 'customFields' => []],
-                ['firstName' => 'Cy',  'email' => 'c@x.com', 'customFields' => []],
-            ],
+            'users' => [['id' => 'u1', 'firstName' => 'Ann', 'lastName' => 'Lee', 'email' => 'a@x.com']],
             default => [],
         };
+    }
+
+    public function searchContacts(GhlConnection $connection, ?int $sinceMs = null, array $opts = []): array
+    {
+        $this->calls[] = '/contacts/search';
+
+        return [
+            'contacts' => [
+                ['id' => 'c1', 'firstName' => 'Bob', 'email' => 'b@x.com', 'dateUpdated' => 1000, 'customFields' => []],
+                ['id' => 'c2', 'firstName' => 'Cy',  'email' => 'c@x.com', 'dateUpdated' => 2000, 'customFields' => []],
+            ],
+            'total' => 2,
+        ];
     }
 }
 
