@@ -152,6 +152,20 @@
             </div>
         @endif
 
+        {{-- Any validation / caught exception surfaced via withErrors() shows here,
+             so failures are never silent for the user. --}}
+        @if ($errors->any())
+            <div class="mx-6 lg:mx-8 mt-6 rounded-lg px-4 py-3 text-sm"
+                 style="background:rgba(226,105,79,0.10);border:1px solid var(--coral);color:#9E3B24;">
+                <div class="font-semibold mb-1">Something went wrong:</div>
+                <ul class="list-disc ms-5 space-y-0.5">
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
         {{ $slot }}
     </main>
 </div>
