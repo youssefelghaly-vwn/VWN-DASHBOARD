@@ -11,9 +11,19 @@
             <p class="text-sm mb-6" style="color:var(--ink-soft);">
                 Connect an integration to start syncing data, then build your first dashboard.
             </p>
-            <a href="{{ route('admin.integrations.index') }}"
-               class="inline-block px-5 py-2.5 rounded-lg text-sm font-semibold text-white"
-               style="background:var(--mint-deep);">Connect an integration</a>
+            <div class="flex items-center justify-center gap-2">
+                <a href="{{ route('admin.integrations.index') }}"
+                   class="inline-block px-5 py-2.5 rounded-lg text-sm font-semibold text-white"
+                   style="background:var(--mint-deep);">Connect an integration</a>
+                <form method="POST" action="{{ route('admin.dashboards.store') }}"
+                      onsubmit="const n=prompt('Name for the new dashboard:'); if(!n){return false;} this.name.value=n;">
+                    @csrf
+                    <input type="hidden" name="name">
+                    <button class="px-5 py-2.5 rounded-lg text-sm font-medium" style="border:1px solid var(--line);background:var(--panel);">
+                        Create a dashboard
+                    </button>
+                </form>
+            </div>
         </div>
     @else
     <div x-data="dashboard(@js([
@@ -36,6 +46,14 @@
             </div>
 
             <div class="flex gap-2">
+                <form method="POST" action="{{ route('admin.dashboards.store') }}"
+                      onsubmit="const n=prompt('Name for the new dashboard:'); if(!n){return false;} this.name.value=n;">
+                    @csrf
+                    <input type="hidden" name="name">
+                    <button class="px-4 py-2 rounded-lg text-sm font-medium" style="border:1px solid var(--line);background:var(--panel);">
+                        + New dashboard
+                    </button>
+                </form>
                 <button @click="openBuilder()" :disabled="!sources.length"
                         class="px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-40"
                         style="background:var(--mint-deep);">

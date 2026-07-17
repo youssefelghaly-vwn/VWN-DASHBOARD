@@ -4,8 +4,39 @@
         <div class="mb-7">
             <h1 class="display text-2xl font-bold">Menu Management</h1>
             <p class="text-sm" style="color:var(--ink-soft);">
-                Control the sidebar. Add a dashboard to the menu without touching routes.
+                Create dashboards and control the sidebar — no routes to touch.
             </p>
+        </div>
+
+        {{-- DASHBOARDS --}}
+        <div class="rounded-xl mb-8" style="background:var(--panel);border:1px solid var(--line);">
+            <div class="px-5 py-4 flex items-center justify-between" style="border-bottom:1px solid var(--line);">
+                <h3 class="display text-[14.5px] font-semibold uppercase tracking-wide">Dashboards</h3>
+                <form method="POST" action="{{ route('admin.dashboards.store') }}" class="flex gap-2">
+                    @csrf
+                    <input name="name" required placeholder="New dashboard name"
+                           class="rounded-lg text-xs px-3 py-2 w-48" style="border:1px solid var(--line);background:var(--panel-alt);">
+                    <button class="px-3 py-2 rounded-lg text-xs font-semibold text-white" style="background:var(--mint-deep);">Create</button>
+                </form>
+            </div>
+            @forelse ($dashboards as $dashboard)
+                <div class="px-5 py-3 flex items-center justify-between gap-3"
+                     @if (! $loop->last) style="border-bottom:1px solid var(--line);" @endif>
+                    <div>
+                        <a href="{{ route('admin.dashboards.show', $dashboard->slug) }}" class="font-semibold text-sm underline">{{ $dashboard->name }}</a>
+                        @if ($dashboard->is_default)<span class="mono text-[10px] ms-2" style="color:var(--mint-deep);">default</span>@endif
+                    </div>
+                    @unless ($dashboard->is_default)
+                        <form method="POST" action="{{ route('admin.dashboards.destroy', $dashboard) }}"
+                              onsubmit="return confirm('Delete {{ $dashboard->name }} and its charts/metrics?')">
+                            @csrf @method('DELETE')
+                            <button class="px-3 py-1.5 rounded-lg text-xs font-medium" style="color:var(--coral);border:1px solid var(--line);">Delete</button>
+                        </form>
+                    @endunless
+                </div>
+            @empty
+                <div class="px-5 py-6 text-center text-sm" style="color:var(--ink-soft);">No dashboards yet — create one above.</div>
+            @endforelse
         </div>
 
         {{-- CURRENT ITEMS --}}

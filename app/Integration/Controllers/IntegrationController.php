@@ -20,7 +20,7 @@ class IntegrationController extends Controller
     public function index()
     {
         return view('admin.integrations', [
-            'integrations' => Integration::orderBy('name')->get(),
+            'integrations' => Integration::with('latestSyncRun')->orderBy('name')->get(),
             'catalogue' => $this->manager->catalogue(),
         ]);
     }

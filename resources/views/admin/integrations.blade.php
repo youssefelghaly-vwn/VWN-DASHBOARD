@@ -20,15 +20,24 @@
             </div>
 
             @forelse ($integrations as $integration)
+                @php $run = $integration->latestSyncRun; @endphp
                 <div class="px-5 py-4 flex flex-wrap items-center justify-between gap-3"
                      @if (! $loop->last) style="border-bottom:1px solid var(--line);" @endif>
-                    <div>
+                    <div class="min-w-0">
                         <div class="font-semibold text-sm">{{ $integration->name }}</div>
                         <div class="mono text-[11px]" style="color:var(--ink-soft);">
                             {{ $catalogue[$integration->provider] ?? $integration->provider }} ·
                             <span style="color:{{ $integration->status === 'connected' ? 'var(--mint-deep)' : 'var(--coral)' }};">{{ ucfirst($integration->status) }}</span> ·
                             synced {{ $integration->last_synced_at?->diffForHumans() ?? 'never' }}
+                            @if ($run && $run->records_synced) · {{ number_format($run->records_synced) }} records @endif
                         </div>
+                        @if ($run?->last_error)
+                            <div class="mt-2 rounded-md px-3 py-2 text-[11px]"
+                                 style="background:rgba(226,105,79,0.10);border:1px solid var(--coral);color:#9E3B24;">
+                                <span class="font-semibold">Last sync failed:</span> {{ $run->last_error }}
+                                <a href="{{ route('admin.data-health') }}" class="underline ms-1">Details</a>
+                            </div>
+                        @endif
                     </div>
                     <div class="flex gap-2">
                         <form method="POST" action="{{ route('admin.integrations.sync', $integration) }}">
