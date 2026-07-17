@@ -9,7 +9,8 @@ use Illuminate\Support\Facades\Schema;
  * that answers "where does the dashboard read from right now?". Sheets keeps
  * working exactly as before when source = 'sheets' (the default).
  */
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::table('sheet_settings', function (Blueprint $table) {

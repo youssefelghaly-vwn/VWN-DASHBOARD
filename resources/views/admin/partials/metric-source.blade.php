@@ -2,20 +2,19 @@
     resources/views/admin/partials/metric-source.blade.php
 
     A reusable "where does this number come from" editor.
-    $bind = the Alpine object path holding { sheet, agg, column, filter_* }.
-    Used twice: once for a simple metric (bind="metric.simple"), and once per
-    formula variable (bind="v"). Because both shapes are identical, the same
-    markup drives both.
+    $bind = the Alpine object path holding { key, agg, column, filter_* }.
+    `key` is the composite integration+dataset source (integration_id::dataset).
+    Used for a simple metric (bind="metric.simple") and per formula variable.
 --}}
 <div class="grid grid-cols-12 gap-2">
     <div class="col-span-3">
-        <label class="block text-[10px] mb-1" style="color:var(--ink-soft);">Sheet</label>
-        <select x-model="{{ $bind }}.sheet"
+        <label class="block text-[10px] mb-1" style="color:var(--ink-soft);">Source</label>
+        <select x-model="{{ $bind }}.key"
                 @change="{{ $bind }}.column = ''; {{ $bind }}.filter_column = ''"
                 class="w-full rounded text-xs px-2 py-1.5"
                 style="border:1px solid var(--line);background:var(--panel);">
-            <template x-for="sh in sheetNames" :key="sh">
-                <option :value="sh" x-text="sh"></option>
+            <template x-for="s in sources" :key="s.key">
+                <option :value="s.key" x-text="s.label"></option>
             </template>
         </select>
     </div>
@@ -43,7 +42,7 @@
                 class="w-full rounded text-xs px-2 py-1.5"
                 style="border:1px solid var(--line);background:var(--panel);">
             <option value="">Select…</option>
-            <template x-for="col in (schema[{{ $bind }}.sheet] || [])" :key="col">
+            <template x-for="col in columnsFor({{ $bind }}.key)" :key="col">
                 <option :value="col" x-text="col"></option>
             </template>
         </select>
@@ -56,7 +55,7 @@
                 class="w-full rounded text-xs px-2 py-1.5"
                 style="border:1px solid var(--line);background:var(--panel);">
             <option value="">— no filter —</option>
-            <template x-for="col in (schema[{{ $bind }}.sheet] || [])" :key="col">
+            <template x-for="col in columnsFor({{ $bind }}.key)" :key="col">
                 <option :value="col" x-text="col"></option>
             </template>
         </select>
