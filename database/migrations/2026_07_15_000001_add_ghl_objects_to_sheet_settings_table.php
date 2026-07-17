@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\Schema;
  * all four. NULL preserves the old behaviour — pull everything — so existing
  * installs keep working until they narrow the selection.
  */
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::table('sheet_settings', function (Blueprint $table) {

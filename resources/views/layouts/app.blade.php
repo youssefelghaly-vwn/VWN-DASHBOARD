@@ -59,56 +59,59 @@
         </div>
 
         <nav class="space-y-1">
-            @php
-                $navSetting = \App\Models\SheetSetting::current();
-                $links = [
-                    ['route' => 'admin.dashboard', 'label' => 'Dashboard', 'icon' => '▤'],
-                ];
-                if ($navSetting?->source === 'ghl') {
-                    $links[] = ['route' => 'admin.ghl.health', 'label' => 'Data Health', 'icon' => '❤'];
-                }
-                $links[] = ['route' => 'admin.settings', 'label' => 'Settings', 'icon' => '⚙'];
-            @endphp
+            {{-- Dashboards come from the DB-backed menu (no hardcoded routes). --}}
+            <a href="{{ route('admin.dashboard') }}" @click="mobileNav = false"
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] transition"
+               style="{{ request()->routeIs('admin.dashboard') ? 'background:rgba(79,227,166,0.12);color:var(--mint);font-weight:600;' : 'color:#B9CCC4;' }}">
+                <span class="text-base leading-none">▤</span><span>Dashboard</span>
+            </a>
 
-            @foreach ($links as $link)
-                @php $active = request()->routeIs($link['route'].'*'); @endphp
-                <a href="{{ route($link['route']) }}"
-                   @click="mobileNav = false"
+            @foreach (($menuTree ?? []) as $item)
+                @php $active = $item->dashboard && request()->routeIs('admin.dashboards.show') && request()->route('dashboard')?->slug === $item->dashboard->slug; @endphp
+                <a href="{{ $item->href() }}" @click="mobileNav = false"
                    class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] transition"
-                   style="{{ $active
-                        ? 'background:rgba(79,227,166,0.12);color:var(--mint);font-weight:600;'
-                        : 'color:#B9CCC4;' }}">
-                    <span class="text-base leading-none">{{ $link['icon'] }}</span>
-                    <span>{{ $link['label'] }}</span>
+                   style="{{ $active ? 'background:rgba(79,227,166,0.12);color:var(--mint);font-weight:600;' : 'color:#B9CCC4;' }}">
+                    <span class="text-base leading-none">◧</span><span>{{ $item->label }}</span>
                 </a>
             @endforeach
+
+            @php
+                $tools = [
+                    ['route' => 'admin.integrations.index', 'label' => 'Integrations', 'icon' => '🔌'],
+                    ['route' => 'admin.data-health',        'label' => 'Data Health',  'icon' => '❤'],
+                    ['route' => 'admin.menu.index',         'label' => 'Menu',         'icon' => '☰'],
+                ];
+            @endphp
+            <div class="mt-4 pt-4 space-y-1" style="border-top:1px solid var(--sidebar-line);">
+                @foreach ($tools as $link)
+                    @php $active = request()->routeIs($link['route'].'*'); @endphp
+                    <a href="{{ route($link['route']) }}" @click="mobileNav = false"
+                       class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] transition"
+                       style="{{ $active ? 'background:rgba(79,227,166,0.12);color:var(--mint);font-weight:600;' : 'color:#B9CCC4;' }}">
+                        <span class="text-base leading-none">{{ $link['icon'] }}</span><span>{{ $link['label'] }}</span>
+                    </a>
+                @endforeach
+            </div>
         </nav>
 
         {{-- CONNECTION STATUS --}}
         @php
-            $setting = \App\Models\SheetSetting::current();
-            $isGhlSource = $setting?->source === 'ghl';
-            $unitCount = $isGhlSource
-                ? count($setting->ghlObjects())
-                : count($setting?->sheet_names ?? []);
-            $unitWord = $isGhlSource ? 'object' : 'tab';
+            $integrations = \App\Integration\Models\Integration::query()->get();
+            $connected    = $integrations->where('status', 'connected')->count();
         @endphp
         <div class="mt-8 pt-5" style="border-top:1px solid var(--sidebar-line);">
-            <div class="text-[10.5px] uppercase tracking-[1.5px] mb-3" style="color:#7FA396;">
-                {{ $isGhlSource ? 'GoHighLevel' : 'Sheet' }} Status
-            </div>
+            <div class="text-[10.5px] uppercase tracking-[1.5px] mb-3" style="color:#7FA396;">Integrations</div>
             <div class="flex items-center gap-2 text-[11.5px]" style="color:#B9CCC4;">
                 <span class="w-[7px] h-[7px] rounded-full shrink-0"
-                      style="background:{{ $setting ? 'var(--mint)' : '#5C7469' }};
-                             {{ $setting ? 'box-shadow:0 0 0 3px rgba(79,227,166,0.2);' : '' }}"></span>
-                <span>{{ $setting ? 'Connected' : 'Not connected' }}</span>
+                      style="background:{{ $connected ? 'var(--mint)' : '#5C7469' }};
+                             {{ $connected ? 'box-shadow:0 0 0 3px rgba(79,227,166,0.2);' : '' }}"></span>
+                <span>{{ $connected }} of {{ $integrations->count() }} connected</span>
             </div>
-            @if ($setting)
+            @foreach ($integrations as $integration)
                 <div class="mono text-[10px] mt-2" style="color:#4A6459;">
-                    {{ $unitCount }} {{ Str::plural($unitWord, $unitCount) }} ·
-                    synced {{ $setting->last_synced_at?->diffForHumans(short: true) ?? 'never' }}
+                    {{ $integration->name }} · {{ $integration->last_synced_at?->diffForHumans(short: true) ?? 'never synced' }}
                 </div>
-            @endif
+            @endforeach
         </div>
 
         {{-- USER --}}

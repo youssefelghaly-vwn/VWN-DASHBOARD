@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\Schema;
  * No refresh, no expiry, no callback. The admin pastes the token + their
  * location id, and we're connected.
  */
-return new class extends Migration {
+return new class extends Migration
+{
     public function up(): void
     {
         Schema::create('ghl_connections', function (Blueprint $table) {
