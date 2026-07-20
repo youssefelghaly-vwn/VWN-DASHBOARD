@@ -9,7 +9,7 @@ use App\Integration\Controllers\IntegrationController;
 use App\Menu\Controllers\MenuController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'admin'])->name('admin.')->group(function () {
     // Dashboards — the default index redirects to the default dashboard.
     Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
     Route::post('/dashboards', [DashboardController::class, 'store'])->name('dashboards.store');
