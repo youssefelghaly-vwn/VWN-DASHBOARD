@@ -22,6 +22,16 @@ use Illuminate\Support\Str;
  * Last Touch Date, Next Action Date, Notes). Those custom fields don't exist
  * on a fresh GHL location — this seed assumes they've been created, which is
  * called out explicitly in the gap-analysis deliverables.
+ *
+ * Reuses an already-connected 'gohighlevel' Integration row if one exists
+ * (matched by provider only — never by name, since the real one may be named
+ * differently than this file's fallback) rather than creating a duplicate.
+ * Existing credentials/config/name/status are left untouched either way.
+ *
+ * WARNING — destructive: whatever is currently in that integration's
+ * Contacts dataset (including real synced rows, if any) is deleted and
+ * replaced with this seeded demo set every time this runs. Don't run against
+ * a database whose GHL Contacts data you need to keep.
  */
 class GhlContactsSeeder extends Seeder
 {
@@ -78,16 +88,27 @@ class GhlContactsSeeder extends Seeder
 
     public function run(): void
     {
-        $integration = Integration::updateOrCreate(
-            ['provider' => 'gohighlevel', 'name' => 'GoHighLevel — VWN Sales + CD'],
-            [
-                'credentials' => ['access_token' => null, 'location_id' => 'PNCMlG4voJswQZCqs2Uh', 'location_name' => 'VWN Sales + CD'],
-                'config' => ['datasets' => ['Contacts'], 'account_name' => 'VWN Sales + CD'],
-                'status' => 'connected',
-                'last_synced_at' => now(),
-            ]
-        );
+        // Reuse the already-connected GoHighLevel integration if one exists (real
+        // credentials, real config, real name) — never touch those fields, just
+        // point our seeded rows at it. Only fall back to creating a placeholder
+        // shell on a fresh/local DB that has no integration connected yet.
+        $integration = Integration::where('provider', 'gohighlevel')->first();
 
+        if (! $integration) {
+            $integration = Integration::create([
+                'provider' => 'gohighlevel',
+                'name' => 'GoHighLevel — VWN Sales + CD',
+                'credentials' => ['access_token' => null, 'location_id' => 'PNCMlG4voJswQZCqs2Uh', 'location_name' => 'VWN Sales + CD'],
+                'config' => ['datasets' => ['Contacts']],
+                'status' => 'connected',
+            ]);
+        }
+
+        $integration->forceFill(['last_synced_at' => now()])->save();
+
+        // This still replaces whatever is currently in the Contacts dataset for
+        // that integration (real synced rows included) with the seeded demo set —
+        // see the class docblock.
         $integration->records()->where('dataset', 'Contacts')->delete();
 
         $faker = \Faker\Factory::create();

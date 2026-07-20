@@ -16,6 +16,16 @@ use Illuminate\Support\Str;
  * from a live Graph API sync. Campaign names match GhlContactsSeeder's
  * "Campaign / Ad Source" values so the two dashboards tell a consistent story
  * even though (by design) each integration's rows are read independently.
+ *
+ * Reuses an already-connected 'meta_ads' Integration row if one exists
+ * (matched by provider only — never by name, since the real one may be named
+ * differently than this file's fallback) rather than creating a duplicate.
+ * Existing credentials/config/name/status are left untouched either way.
+ *
+ * WARNING — destructive: whatever is currently in that integration's five
+ * datasets (including real synced rows, if any) is deleted and replaced with
+ * this seeded demo set every time this runs. Don't run against a database
+ * whose Meta Ads data you need to keep.
  */
 class MetaAdsSeeder extends Seeder
 {
@@ -26,15 +36,19 @@ class MetaAdsSeeder extends Seeder
 
     public function run(): void
     {
-        $integration = Integration::updateOrCreate(
-            ['provider' => 'meta_ads', 'name' => 'Meta Ads — VWN Growth'],
-            [
+        $integration = Integration::where('provider', 'meta_ads')->first();
+
+        if (! $integration) {
+            $integration = Integration::create([
+                'provider' => 'meta_ads',
+                'name' => 'Meta Ads — VWN Growth',
                 'credentials' => ['access_token' => null, 'ad_account_id' => 'act_1234567890'],
                 'config' => ['account_name' => 'VWN Growth', 'currency' => 'USD'],
                 'status' => 'connected',
-                'last_synced_at' => now(),
-            ]
-        );
+            ]);
+        }
+
+        $integration->forceFill(['last_synced_at' => now()])->save();
 
         foreach (['Ad Accounts', 'Campaigns', 'Ad Sets', 'Ads', 'Daily Performance'] as $dataset) {
             $integration->records()->where('dataset', $dataset)->delete();
