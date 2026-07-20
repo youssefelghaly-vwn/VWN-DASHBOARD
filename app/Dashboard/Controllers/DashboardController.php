@@ -29,7 +29,7 @@ class DashboardController extends Controller
             ]);
         }
 
-        return redirect()->route('dashboards.show', $dashboard->slug);
+        return redirect()->route('admin.dashboards.show', $dashboard->slug);
     }
 
     public function show(Dashboard $dashboard, RecordReader $reader)
@@ -76,7 +76,7 @@ class DashboardController extends Controller
             'position' => (int) Dashboard::max('position') + 1,
         ]);
 
-        return redirect()->route('dashboards.show', $dashboard->slug)
+        return redirect()->route('admin.dashboards.show', $dashboard->slug)
             ->with('status', 'Dashboard created.');
     }
 
