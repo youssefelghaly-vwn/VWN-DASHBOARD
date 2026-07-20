@@ -149,7 +149,7 @@ class GoHighLevelProvider implements IntegrationProvider
     {
         return match ($dataset) {
             'Opportunities' => ['Pipeline', 'Stage', 'Status', 'Monetary Value', 'Assigned User', 'Contact', 'Source', 'Created', 'Updated'],
-            'Contacts' => ['Name', 'Email', 'Phone', 'Company', 'Type', 'Tags', 'Source', 'Assigned User', 'Created'],
+            'Contacts' => ['Name', 'Email', 'Phone', 'Company', 'Type', 'Tags', 'Source', 'Assigned User', 'Country', 'Website', 'Created', 'Updated'],
             'Appointments' => ['Calendar', 'Status', 'Assigned User', 'Contact', 'Start', 'End', 'Created'],
             'Users' => ['Name', 'Email', 'Role'],
             default => [],
@@ -334,7 +334,10 @@ class GoHighLevelProvider implements IntegrationProvider
             'Tags' => $this->str($ct['tags'] ?? []),
             'Source' => $this->str($ct['source'] ?? ''),
             'Assigned User' => $this->str($userNames[$ct['assignedTo'] ?? null] ?? 'Unassigned'),
+            'Country' => $this->str($ct['country'] ?? ''),
+            'Website' => $this->str($ct['website'] ?? ''),
             'Created' => $this->date($ct['dateAdded'] ?? null),
+            'Updated' => $this->date($ct['dateUpdated'] ?? null),
         ];
 
         foreach ($ct['customFields'] ?? [] as $cf) {

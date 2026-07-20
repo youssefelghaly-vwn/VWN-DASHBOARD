@@ -15,5 +15,9 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         (new AdminUserSeeder)->run();
+        (new GhlContactsSeeder)->run();
+        (new MetaAdsSeeder)->run();
+        (new DashboardsSeeder)->run();
+        (new MenuItemsSeeder)->run();
     }
 }
