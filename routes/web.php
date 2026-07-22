@@ -22,13 +22,7 @@ Route::middleware(['auth', 'admin'])->name('admin.')->group(function () {
 
     // Chart widgets.
     Route::post('/dashboards/{dashboard}/charts', [ChartController::class, 'store'])->name('charts.store');
-    // Route::put('/charts/{chart}', [ChartController::class, 'update'])->name('charts.update');
-    Route::put('/charts/{id}', function ($id) {
-        return response()->json([
-            'id' => $id,
-            'method' => request()->method(),
-        ]);
-    });
+    Route::put('/charts/{chart}', [ChartController::class, 'update'])->name('charts.update');
     Route::delete('/charts/{chart}', [ChartController::class, 'destroy'])->name('charts.destroy');
 
     // Metric widgets.
