@@ -15,12 +15,13 @@ class Metric extends Model
 {
     protected $fillable = [
         'user_id', 'dashboard_id', 'integration_id', 'title', 'mode', 'sheet',
-        'agg', 'column', 'filter_column', 'filter_operator', 'filter_value',
+        'agg', 'column', 'filter_column', 'filter_operator', 'filter_value', 'filters',
         'expression', 'variables', 'format', 'decimals', 'subtitle', 'accent', 'position',
     ];
 
     protected $casts = [
         'variables' => 'array',
+        'filters' => 'array',
         'accent' => 'boolean',
     ];
 

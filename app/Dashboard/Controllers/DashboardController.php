@@ -64,6 +64,52 @@ class DashboardController extends Controller
         ]);
     }
 
+    /**
+     * Distinct, non-empty values for one column of a synced dataset — used by
+     * the builder's cascading pickers (e.g. Pipeline, then Stage scoped to the
+     * chosen Pipeline). `filters` is a JSON-encoded [{column, value}] list of
+     * equality conditions narrowing which rows are considered.
+     */
+    public function distinct(Request $request, RecordReader $reader)
+    {
+        $data = $request->validate([
+            'integration_id' => ['required', 'integer'],
+            'dataset' => ['required', 'string'],
+            'column' => ['required', 'string'],
+            'filters' => ['nullable', 'string'],
+        ]);
+
+        $rows = $reader->rows((int) $data['integration_id'], $data['dataset']);
+
+        $scopes = [];
+        if (! empty($data['filters'])) {
+            $decoded = json_decode($data['filters'], true);
+            $scopes = is_array($decoded) ? $decoded : [];
+        }
+
+        foreach ($scopes as $scope) {
+            $column = $scope['column'] ?? null;
+            if (! $column) {
+                continue;
+            }
+
+            $needle = trim((string) ($scope['value'] ?? ''));
+            $rows = array_values(array_filter(
+                $rows,
+                fn ($row) => trim((string) ($row[$column] ?? '')) === $needle
+            ));
+        }
+
+        $values = collect($rows)
+            ->map(fn ($row) => trim((string) ($row[$data['column']] ?? '')))
+            ->filter(fn ($v) => $v !== '')
+            ->unique()
+            ->sort()
+            ->values();
+
+        return response()->json($values);
+    }
+
     public function store(Request $request)
     {
         $data = $request->validate([

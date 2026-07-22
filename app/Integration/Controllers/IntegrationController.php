@@ -46,6 +46,43 @@ class IntegrationController extends Controller
         return back()->with('status', "Connected {$integration->name}. First sync is running.");
     }
 
+    /**
+     * Re-run connect() against the SAME integration instead of a new one.
+     * Any submitted field left blank keeps its current value (credentials
+     * stay hidden — the form pre-fills only non-secret fields), so rotating a
+     * token just means typing a new one in; leaving it blank keeps the old one.
+     */
+    public function update(Request $request, Integration $integration)
+    {
+        $provider = $integration->provider();
+
+        $merged = collect($request->except(['_token', '_method', 'provider']))
+            ->map(function ($value, $key) use ($integration) {
+                $value = is_string($value) ? trim($value) : $value;
+
+                if ($value !== '' && $value !== null) {
+                    return $value;
+                }
+
+                $existing = $integration->credential($key) ?? $integration->setting($key);
+
+                if (is_array($existing)) {
+                    $existing = implode(', ', $existing);
+                }
+
+                return $existing ?? $value;
+            })
+            ->all();
+
+        try {
+            $provider->connect($integration, $merged);
+        } catch (\Throwable $e) {
+            return back()->withErrors(['integration' => $e->getMessage()])->withInput();
+        }
+
+        return back()->with('status', "Updated {$integration->name}.");
+    }
+
     public function sync(Integration $integration)
     {
         SyncIntegrationJob::dispatch($integration->id);

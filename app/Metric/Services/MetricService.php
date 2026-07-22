@@ -4,6 +4,7 @@ namespace App\Metric\Services;
 
 use App\Dashboard\Models\Metric;
 use App\Integration\Services\RecordReader;
+use App\Support\FiltersRows;
 use RuntimeException;
 
 /**
@@ -16,6 +17,8 @@ use RuntimeException;
  */
 class MetricService
 {
+    use FiltersRows;
+
     public function __construct(private RecordReader $reader) {}
 
     public function build(Metric $metric): array
@@ -48,6 +51,7 @@ class MetricService
                 'filter_column' => $metric->filter_column,
                 'filter_operator' => $metric->filter_operator,
                 'filter_value' => $metric->filter_value,
+                'filters' => $metric->filters ?? [],
                 'expression' => $metric->expression,
                 'variables' => $metric->variables ?? [],
                 'format' => $metric->format,
@@ -69,6 +73,7 @@ class MetricService
             'filter_column' => $m->filter_column,
             'filter_operator' => $m->filter_operator,
             'filter_value' => $m->filter_value,
+            'filters' => $m->filters ?? [],
         ];
     }
 
@@ -119,35 +124,23 @@ class MetricService
         };
     }
 
+    /**
+     * Applies the extra {column, operator, value} conditions (e.g. the
+     * Pipeline/Stage cascading picker) on top of the legacy single
+     * filter_column/operator/value — both sets are ANDed together.
+     */
     private function applyFilter(array $rows, array $cfg): array
     {
+        $rows = $this->filterRows($rows, $cfg['filters'] ?? []);
+
         $col = $cfg['filter_column'] ?? null;
         $op = $cfg['filter_operator'] ?? null;
 
-        if (! $col || ! $op) {
-            return $rows;
+        if ($col && $op) {
+            $rows = $this->applyOneFilter($rows, $col, $op, $cfg['filter_value'] ?? '');
         }
 
-        $needle = mb_strtolower(trim((string) ($cfg['filter_value'] ?? '')));
-
-        return array_values(array_filter($rows, function ($row) use ($col, $op, $needle) {
-            $raw = $row[$col] ?? '';
-            $hay = mb_strtolower(trim((string) $raw));
-            $num = $this->numeric($raw);
-            $need = $this->numeric($needle);
-
-            return match ($op) {
-                'eq' => $hay === $needle,
-                'neq' => $hay !== $needle,
-                'contains' => $needle !== '' && str_contains($hay, $needle),
-                'not_contains' => $needle === '' || ! str_contains($hay, $needle),
-                'gt' => $num !== null && $need !== null && $num > $need,
-                'lt' => $num !== null && $need !== null && $num < $need,
-                'not_empty' => $hay !== '',
-                'empty' => $hay === '',
-                default => true,
-            };
-        }));
+        return $rows;
     }
 
     private function evaluateFormula(Metric $metric): float

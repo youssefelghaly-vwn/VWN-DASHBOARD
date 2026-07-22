@@ -21,8 +21,9 @@
 
             @forelse ($integrations as $integration)
                 @php $run = $integration->latestSyncRun; @endphp
-                <div class="px-5 py-4 flex flex-wrap items-center justify-between gap-3"
+                <div x-data="{ editing: false }"
                      @if (! $loop->last) style="border-bottom:1px solid var(--line);" @endif>
+                <div class="px-5 py-4 flex flex-wrap items-center justify-between gap-3">
                     <div class="min-w-0">
                         <div class="font-semibold text-sm">{{ $integration->name }}</div>
                         <div class="mono text-[11px]" style="color:var(--ink-soft);">
@@ -40,6 +41,10 @@
                         @endif
                     </div>
                     <div class="flex gap-2">
+                        <button @click="editing = !editing" type="button"
+                                class="px-3 py-1.5 rounded-lg text-xs font-medium" style="border:1px solid var(--line);">
+                            <span x-text="editing ? 'Cancel' : 'Edit'"></span>
+                        </button>
                         <form method="POST" action="{{ route('admin.integrations.sync', $integration) }}">
                             @csrf
                             <button class="px-3 py-1.5 rounded-lg text-xs font-medium" style="border:1px solid var(--line);">↻ Sync</button>
@@ -50,6 +55,52 @@
                             <button class="px-3 py-1.5 rounded-lg text-xs font-medium" style="color:var(--coral);border:1px solid var(--line);">Disconnect</button>
                         </form>
                     </div>
+                </div>
+
+                <div x-show="editing" x-cloak class="px-5 pb-5">
+                    <form method="POST" action="{{ route('admin.integrations.update', $integration) }}" class="grid grid-cols-2 gap-4 p-4 rounded-lg" style="background:var(--panel-alt);">
+                        @csrf @method('PUT')
+
+                        @if ($integration->provider === 'gohighlevel')
+                            <div>
+                                <label class="block text-xs font-semibold mb-1.5">Private Integration Token</label>
+                                <input name="access_token" placeholder="Leave blank to keep the current token" class="w-full rounded-lg text-sm px-3 py-2"
+                                       style="border:1px solid var(--line);background:var(--panel);">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold mb-1.5">Location ID</label>
+                                <input name="location_id" value="{{ $integration->credential('location_id') }}" class="w-full rounded-lg text-sm px-3 py-2"
+                                       style="border:1px solid var(--line);background:var(--panel);">
+                            </div>
+                        @elseif ($integration->provider === 'google_sheets')
+                            <div>
+                                <label class="block text-xs font-semibold mb-1.5">Apps Script URL</label>
+                                <input name="endpoint_url" value="{{ $integration->setting('endpoint_url') }}" class="w-full rounded-lg text-sm px-3 py-2"
+                                       style="border:1px solid var(--line);background:var(--panel);">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold mb-1.5">Sheet/tab names (comma-separated)</label>
+                                <input name="sheet_names" value="{{ implode(', ', $integration->setting('sheet_names', [])) }}" class="w-full rounded-lg text-sm px-3 py-2"
+                                       style="border:1px solid var(--line);background:var(--panel);">
+                            </div>
+                        @elseif ($integration->provider === 'meta_ads')
+                            <div>
+                                <label class="block text-xs font-semibold mb-1.5">Access Token</label>
+                                <input name="access_token" placeholder="Leave blank to keep the current token" class="w-full rounded-lg text-sm px-3 py-2"
+                                       style="border:1px solid var(--line);background:var(--panel);">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold mb-1.5">Ad Account ID</label>
+                                <input name="ad_account_id" value="{{ $integration->credential('ad_account_id') }}" class="w-full rounded-lg text-sm px-3 py-2"
+                                       style="border:1px solid var(--line);background:var(--panel);">
+                            </div>
+                        @endif
+
+                        <div class="col-span-2">
+                            <button class="px-4 py-2 rounded-lg text-sm font-semibold text-white" style="background:var(--mint-deep);">Save changes</button>
+                        </div>
+                    </form>
+                </div>
                 </div>
             @empty
                 <div class="px-5 py-8 text-center text-sm" style="color:var(--ink-soft);">Nothing connected yet.</div>

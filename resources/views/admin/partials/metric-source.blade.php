@@ -10,7 +10,7 @@
     <div class="col-span-3">
         <label class="block text-[10px] mb-1" style="color:var(--ink-soft);">Source</label>
         <select x-model="{{ $bind }}.key"
-                @change="{{ $bind }}.column = ''; {{ $bind }}.filter_column = ''"
+                @change="{{ $bind }}.column = ''; {{ $bind }}.filter_column = ''; {{ $bind }}.filters = []"
                 class="w-full rounded text-xs px-2 py-1.5"
                 style="border:1px solid var(--line);background:var(--panel);">
             <template x-for="s in sources" :key="s.key">
@@ -47,6 +47,36 @@
             </template>
         </select>
     </div>
+
+    {{-- PIPELINE / STAGE — cascading picker, only shown when the source has these columns --}}
+    <template x-if="columnsFor({{ $bind }}.key).includes('Pipeline')">
+        <div class="col-span-12 grid grid-cols-12 gap-2">
+            <div class="col-span-6">
+                <label class="block text-[10px] mb-1" style="color:var(--ink-soft);">Pipeline</label>
+                <select :value="filterVal({{ $bind }}.filters, 'Pipeline')"
+                        @change="setFilterVal({{ $bind }}.filters, 'Pipeline', $event.target.value); setFilterVal({{ $bind }}.filters, 'Stage', '')"
+                        class="w-full rounded text-xs px-2 py-1.5"
+                        style="border:1px solid var(--line);background:var(--panel);">
+                    <option value="">— all pipelines —</option>
+                    <template x-for="p in pipelineOptions({{ $bind }}.key)" :key="p">
+                        <option :value="p" x-text="p"></option>
+                    </template>
+                </select>
+            </div>
+            <div class="col-span-6" x-show="filterVal({{ $bind }}.filters, 'Pipeline')" x-cloak>
+                <label class="block text-[10px] mb-1" style="color:var(--ink-soft);">Stage (kanban card)</label>
+                <select :value="filterVal({{ $bind }}.filters, 'Stage')"
+                        @change="setFilterVal({{ $bind }}.filters, 'Stage', $event.target.value)"
+                        class="w-full rounded text-xs px-2 py-1.5"
+                        style="border:1px solid var(--line);background:var(--panel);">
+                    <option value="">— all stages —</option>
+                    <template x-for="st in stageOptions({{ $bind }})" :key="st">
+                        <option :value="st" x-text="st"></option>
+                    </template>
+                </select>
+            </div>
+        </div>
+    </template>
 
     {{-- FILTER — optional row condition, shared by every measure --}}
     <div class="col-span-4">

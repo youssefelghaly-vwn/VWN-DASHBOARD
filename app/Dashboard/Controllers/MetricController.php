@@ -71,6 +71,10 @@ class MetricController extends Controller
             'filter_column' => ['nullable', 'string'],
             'filter_operator' => ['nullable', 'in:'.implode(',', self::OPS)],
             'filter_value' => ['nullable', 'string', 'max:120'],
+            'filters' => ['nullable', 'array'],
+            'filters.*.column' => ['nullable', 'string'],
+            'filters.*.operator' => ['nullable', 'in:'.implode(',', self::OPS)],
+            'filters.*.value' => ['nullable', 'string', 'max:120'],
 
             'expression' => ['required_if:mode,formula', 'nullable', 'string', 'max:200', 'regex:/^[\w\s{}+\-*\/().]+$/'],
             'variables' => ['required_if:mode,formula', 'nullable', 'array'],
@@ -81,6 +85,10 @@ class MetricController extends Controller
             'variables.*.filter_column' => ['nullable', 'string'],
             'variables.*.filter_operator' => ['nullable', 'in:'.implode(',', self::OPS)],
             'variables.*.filter_value' => ['nullable', 'string', 'max:120'],
+            'variables.*.filters' => ['nullable', 'array'],
+            'variables.*.filters.*.column' => ['nullable', 'string'],
+            'variables.*.filters.*.operator' => ['nullable', 'in:'.implode(',', self::OPS)],
+            'variables.*.filters.*.value' => ['nullable', 'string', 'max:120'],
         ];
 
         $data = $request->validate($rules);
