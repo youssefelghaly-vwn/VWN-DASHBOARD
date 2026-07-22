@@ -714,7 +714,7 @@
 
                 this.builder.saving = true;
                 const editing = Boolean(this.builder.id);
-                const url = editing ? `/admin/charts/${this.builder.id}` : this.cfg.chartsStore;
+                const url = editing ? `/charts/${this.builder.id}` : this.cfg.chartsStore;
 
                 const res = await fetch(url, {
                     method: editing ? 'PUT' : 'POST',
@@ -731,7 +731,7 @@
 
             async destroyChart() {
                 if (!confirm('Delete this chart?')) return;
-                await fetch(`/admin/charts/${this.builder.id}`, { method: 'DELETE', headers: { 'X-CSRF-TOKEN': this.csrf } });
+                await fetch(`/charts/${this.builder.id}`, { method: 'DELETE', headers: { 'X-CSRF-TOKEN': this.csrf } });
                 this.instances[this.builder.id]?.destroy();
                 delete this.instances[this.builder.id];
                 this.builder.open = false;
@@ -824,7 +824,7 @@
 
                 this.metric.saving = true;
                 const editing = Boolean(this.metric.id);
-                const url = editing ? `/admin/metrics/${this.metric.id}` : this.cfg.metricsStore;
+                const url = editing ? `/metrics/${this.metric.id}` : this.cfg.metricsStore;
 
                 const res = await fetch(url, {
                     method: editing ? 'PUT' : 'POST',
@@ -841,7 +841,7 @@
 
             async destroyMetric() {
                 if (!confirm('Delete this metric?')) return;
-                await fetch(`/admin/metrics/${this.metric.id}`, { method: 'DELETE', headers: { 'X-CSRF-TOKEN': this.csrf } });
+                await fetch(`/metrics/${this.metric.id}`, { method: 'DELETE', headers: { 'X-CSRF-TOKEN': this.csrf } });
                 this.metric.open = false;
                 await this.loadMetrics();
             },
