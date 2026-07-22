@@ -138,19 +138,15 @@ class GhlClient
 
             array_push($out, ...$chunk);
 
-            if (count($chunk) < $pageSize) {
-                break;
-            }
-
             $meta = $body['meta'] ?? [];
             $startAfter = $meta['startAfter'] ?? null;
             $startAfterId = $meta['startAfterId'] ?? null;
             $nextPageUrl = $meta['nextPageUrl'] ?? null;
 
-            if (! $nextPageUrl && ! $startAfterId) {
-                break;
-            }
-
+            // A cursor in the response is the authoritative "more data exists"
+            // signal — trust it over comparing this page's size to our
+            // requested pageSize (the API's own default page may differ from
+            // what we asked for, e.g. if the size param wasn't recognized).
             if ($startAfterId) {
                 $cursor = $startAfterId.'|'.$startAfter;
                 if ($cursor === $lastCursor) {
@@ -166,7 +162,14 @@ class GhlClient
                 continue;
             }
 
-            if (! $nextPageUrl) {
+            if ($nextPageUrl) {
+                $query['page'] = ($query['page'] ?? 1) + 1;
+
+                continue;
+            }
+
+            // No cursor info in the response — fall back to a size heuristic.
+            if (count($chunk) < $pageSize) {
                 break;
             }
 

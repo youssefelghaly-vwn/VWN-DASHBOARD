@@ -100,6 +100,15 @@ class GoHighLevelProvider implements IntegrationProvider
                 'Opportunities',
                 $this->rows($this->fetchOpportunities($integration, $pipelines, $userNames))
             ));
+
+            // The full pipeline/stage catalogue — every stage of every pipeline,
+            // even ones with zero opportunities in them right now — so the
+            // dashboard's Pipeline/Stage picker can list them all, not just
+            // whichever ones happen to have synced rows.
+            $this->guard($context, 'Pipeline Stages', fn () => $context->write(
+                'Pipeline Stages',
+                $this->rows($this->pipelineStageRows($pipelines))
+            ));
         }
 
         if ($wants('Contacts')) {
@@ -180,7 +189,7 @@ class GoHighLevelProvider implements IntegrationProvider
     private function fetchUsers(Integration $i, SyncContext $context): array
     {
         try {
-            $rows = $this->client->paginate($i, '/users/', 'users', ['locationId' => $i->credential('location_id')]);
+            $rows = $this->client->paginate($i, '/users/', 'users', ['locationId' => $i->credential('location_id')], ['limitParam' => 'limit']);
         } catch (\Throwable $e) {
             $context->fail('Users', $e->getMessage());
 
@@ -216,6 +225,29 @@ class GoHighLevelProvider implements IntegrationProvider
         }
 
         return $map;
+    }
+
+    /** One row per {Pipeline, Stage} pair, straight from the pipeline catalogue — not from opportunities. */
+    private function pipelineStageRows(array $pipelines): array
+    {
+        $rows = [];
+
+        foreach ($pipelines as $pipeline) {
+            $name = $this->str($pipeline['name'] ?? '');
+            $stages = $pipeline['stages'] ?? [];
+
+            if (! $stages) {
+                $rows[] = ['Pipeline' => $name, 'Stage' => ''];
+
+                continue;
+            }
+
+            foreach ($stages as $stageName) {
+                $rows[] = ['Pipeline' => $name, 'Stage' => $this->str($stageName)];
+            }
+        }
+
+        return $rows;
     }
 
     private function fetchCustomFieldMap(Integration $i, SyncContext $context): array
@@ -258,7 +290,7 @@ class GoHighLevelProvider implements IntegrationProvider
     {
         $rows = $this->client->paginate($i, '/opportunities/search', 'opportunities', [
             'location_id' => $i->credential('location_id'),
-        ]);
+        ], ['limitParam' => 'limit']);
 
         return array_map(function ($o) use ($pipelines, $userNames) {
             $pid = $o['pipelineId'] ?? null;
