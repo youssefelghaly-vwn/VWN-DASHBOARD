@@ -205,7 +205,7 @@
 
                     <div>
                         <label class="block text-xs font-semibold mb-1.5">Chart type</label>
-                        <select x-model="builder.type" class="w-full rounded-lg text-sm px-3 py-2"
+                        <select x-model="builder.type" @change="onTypeChange()" class="w-full rounded-lg text-sm px-3 py-2"
                                 style="border:1px solid var(--line);background:var(--panel-alt);">
                             <optgroup label="Bar">
                                 <option value="bar">Bar</option>
@@ -230,10 +230,15 @@
                     </div>
 
                     <div>
-                        <label class="block text-xs font-semibold mb-1.5">Rows shown</label>
+                        <label class="block text-xs font-semibold mb-1.5"
+                               x-text="isCategoryChart(builder.type) ? 'Max slices' : 'Rows shown'">Rows shown</label>
                         <input type="number" min="1" max="50" x-model.number="builder.limit"
                                class="w-full rounded-lg text-sm px-3 py-2"
                                style="border:1px solid var(--line);background:var(--panel-alt);">
+                        <p class="mt-1 text-[10px] leading-tight" style="color:var(--ink-soft);"
+                           x-show="isCategoryChart(builder.type)" x-cloak>
+                            Only this many categories are drawn (largest first). Raise it to show every status/stage.
+                        </p>
                     </div>
 
                     <div>
@@ -602,6 +607,22 @@
             },
 
             /* ---------- charts ---------- */
+            // Pie / doughnut / polar area group rows into one slice per distinct
+            // value, so a small "max slices" cap silently hides categories. Bar
+            // and line charts genuinely want a top-N, so they keep the default.
+            isCategoryChart(type) {
+                return ['pie', 'doughnut', 'polarArea'].includes(type);
+            },
+
+            // When the user switches to a category chart, open the cap up to the
+            // max so every distinct value (status, stage, …) is drawn by default.
+            // We only raise it, never shrink a value the user chose on purpose.
+            onTypeChange() {
+                if (this.isCategoryChart(this.builder.type) && this.builder.limit < 50) {
+                    this.builder.limit = 50;
+                }
+            },
+
             async loadCharts() {
                 const res = await fetch(this.cfg.chartData, { headers: { Accept: 'application/json' } });
                 this.charts = await res.json();

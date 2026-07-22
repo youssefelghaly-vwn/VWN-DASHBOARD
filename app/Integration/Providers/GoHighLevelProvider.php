@@ -96,18 +96,20 @@ class GoHighLevelProvider implements IntegrationProvider
         $cfMap = $wants('Contacts') ? $this->fetchCustomFieldMap($integration, $context) : [];
 
         if ($wants('Opportunities')) {
-            $this->guard($context, 'Opportunities', fn () => $context->write(
-                'Opportunities',
-                $this->rows($this->fetchOpportunities($integration, $pipelines, $userNames))
-            ));
-
             // The full pipeline/stage catalogue — every stage of every pipeline,
             // even ones with zero opportunities in them right now — so the
             // dashboard's Pipeline/Stage picker can list them all, not just
-            // whichever ones happen to have synced rows.
+            // whichever ones happen to have synced rows. Written BEFORE the
+            // opportunity pull (which can be large and slow) so the pipelines
+            // always land even if fetching opportunities is throttled or fails.
             $this->guard($context, 'Pipeline Stages', fn () => $context->write(
                 'Pipeline Stages',
                 $this->rows($this->pipelineStageRows($pipelines))
+            ));
+
+            $this->guard($context, 'Opportunities', fn () => $context->write(
+                'Opportunities',
+                $this->rows($this->fetchOpportunities($integration, $pipelines, $userNames))
             ));
         }
 
@@ -288,9 +290,7 @@ class GoHighLevelProvider implements IntegrationProvider
 
     private function fetchOpportunities(Integration $i, array $pipelines, array $userNames): array
     {
-        $rows = $this->client->paginate($i, '/opportunities/search', 'opportunities', [
-            'location_id' => $i->credential('location_id'),
-        ], ['limitParam' => 'limit']);
+        $rows = $this->client->searchOpportunities($i);
 
         return array_map(function ($o) use ($pipelines, $userNames) {
             $pid = $o['pipelineId'] ?? null;
