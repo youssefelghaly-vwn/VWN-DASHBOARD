@@ -570,11 +570,20 @@
                 return res.ok ? res.json() : [];
             },
 
+            // Options come from the "Pipeline Stages" catalogue dataset (every
+            // pipeline/stage GHL has, synced independent of opportunity counts),
+            // not from the Opportunities rows themselves — so empty pipelines
+            // and empty stages still show up, not just ones with synced rows.
+            catalogKey(key) {
+                return this.splitKey(key).integration_id + '::Pipeline Stages';
+            },
+
             pipelineOptions(key) {
-                const cacheKey = key + '::Pipeline';
+                const catalogKey = this.catalogKey(key);
+                const cacheKey = catalogKey + '::Pipeline';
                 if (!(cacheKey in this.distinctCache)) {
                     this.distinctCache[cacheKey] = [];
-                    this.fetchDistinct(key, 'Pipeline').then(vals => this.distinctCache[cacheKey] = vals);
+                    this.fetchDistinct(catalogKey, 'Pipeline').then(vals => this.distinctCache[cacheKey] = vals);
                 }
                 return this.distinctCache[cacheKey];
             },
@@ -583,10 +592,11 @@
                 const pipeline = this.filterVal(bind.filters, 'Pipeline');
                 if (!pipeline) return [];
 
-                const cacheKey = bind.key + '::Stage::' + pipeline;
+                const catalogKey = this.catalogKey(bind.key);
+                const cacheKey = catalogKey + '::Stage::' + pipeline;
                 if (!(cacheKey in this.distinctCache)) {
                     this.distinctCache[cacheKey] = [];
-                    this.fetchDistinct(bind.key, 'Stage', [{ column: 'Pipeline', value: pipeline }]).then(vals => this.distinctCache[cacheKey] = vals);
+                    this.fetchDistinct(catalogKey, 'Stage', [{ column: 'Pipeline', value: pipeline }]).then(vals => this.distinctCache[cacheKey] = vals);
                 }
                 return this.distinctCache[cacheKey];
             },
