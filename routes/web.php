@@ -7,6 +7,7 @@ use App\DataHealth\Controllers\DataHealthController;
 use App\Http\Controllers\ProfileController;
 use App\Integration\Controllers\IntegrationController;
 use App\Menu\Controllers\MenuController;
+use App\Sheet\Controllers\SheetController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'admin'])->name('admin.')->group(function () {
@@ -37,6 +38,13 @@ Route::middleware(['auth', 'admin'])->name('admin.')->group(function () {
     Route::put('/integrations/{integration}', [IntegrationController::class, 'update'])->name('integrations.update');
     Route::post('/integrations/{integration}/sync', [IntegrationController::class, 'sync'])->name('integrations.sync');
     Route::delete('/integrations/{integration}', [IntegrationController::class, 'destroy'])->name('integrations.destroy');
+
+    // Sheets — read-only, Excel-style workspace over synced datasets.
+    Route::get('/sheets', [SheetController::class, 'index'])->name('sheets.index');
+    Route::post('/sheets', [SheetController::class, 'store'])->name('sheets.store');
+    Route::get('/sheets/{sheet}/data', [SheetController::class, 'data'])->name('sheets.data');
+    Route::put('/sheets/{sheet}', [SheetController::class, 'update'])->name('sheets.update');
+    Route::delete('/sheets/{sheet}', [SheetController::class, 'destroy'])->name('sheets.destroy');
 
     // Generic Data Health.
     Route::get('/data-health', [DataHealthController::class, 'index'])->name('data-health');
