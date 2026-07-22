@@ -240,6 +240,113 @@ class GhlClient
         return ['contacts' => $out, 'total' => $total];
     }
 
+    /**
+     * Opportunities via GET /opportunities/search, paged to exhaustion — the
+     * opportunities analogue of searchContacts(), so opportunities sync the
+     * whole location instead of the API's small first page.
+     *
+     * GHL's opportunities search defaults to a 20-row page and answers with a
+     * `meta` block carrying the total, the next-page cursor (startAfterId +
+     * startAfter) and/or a nextPageUrl. We drive paging off that meta:
+     *   - keep the running set deduped by opportunity id (a shifting cursor can
+     *     re-serve a boundary row),
+     *   - trust `meta.total` as the "are we done yet" signal, and
+     *   - advance with the response's own cursor, falling back to the last row
+     *     of the page (its id is the cursor GHL expects) and finally to plain
+     *     page-number paging — so a missing cursor field can't truncate a sync.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function searchOpportunities(Integration $integration, array $opts = []): array
+    {
+        $pageSize = (int) ($opts['pageSize'] ?? $this->config('page_size', 100));
+        $maxPages = (int) $this->config('max_pages', 100);
+
+        $query = [
+            'location_id' => $integration->credential('location_id'),
+            'limit' => $pageSize,
+        ];
+
+        $out = [];
+        $seen = [];
+        $total = null;
+        $lastCursor = null;
+        $page = 1;
+
+        for ($i = 0; $i < $maxPages; $i++) {
+            $body = $this->get($integration, '/opportunities/search', $query);
+            $chunk = $body['opportunities'] ?? [];
+
+            if (! $chunk) {
+                break;
+            }
+
+            foreach ($chunk as $opp) {
+                $id = $opp['id'] ?? null;
+                if ($id !== null && isset($seen[$id])) {
+                    continue;
+                }
+                if ($id !== null) {
+                    $seen[$id] = true;
+                }
+                $out[] = $opp;
+            }
+
+            $meta = $body['meta'] ?? [];
+            if ($total === null && isset($meta['total'])) {
+                $total = (int) $meta['total'];
+            }
+
+            // Server says we've got everything — stop before an extra request.
+            if ($total !== null && count($out) >= $total) {
+                break;
+            }
+
+            $startAfterId = $meta['startAfterId'] ?? null;
+            $startAfter = $meta['startAfter'] ?? null;
+
+            // No cursor field in meta: prefer plain page-number paging when the
+            // response advertises a next page, otherwise treat a short page as
+            // the last one. Only when a FULL page arrives with no paging hint at
+            // all do we fall back to the last row as the cursor GHL expects —
+            // that's the "there's clearly more, but no cursor given" case.
+            if (! $startAfterId) {
+                if (! empty($meta['nextPageUrl'])) {
+                    $query['page'] = ++$page;
+
+                    continue;
+                }
+
+                if (count($chunk) < $pageSize) {
+                    break; // a short, cursor-less page is the end of the data
+                }
+
+                $last = end($chunk);
+                $startAfterId = $last['id'] ?? null;
+                $startAfter = $last['sort'][0] ?? null;
+
+                if (! $startAfterId) {
+                    $query['page'] = ++$page; // nothing to anchor on — page on
+
+                    continue;
+                }
+            }
+
+            $cursor = $startAfterId.'|'.$startAfter;
+            if ($cursor === $lastCursor) {
+                break; // cursor didn't move — refuse to loop forever
+            }
+            $lastCursor = $cursor;
+
+            $query['startAfterId'] = $startAfterId;
+            if ($startAfter !== null) {
+                $query['startAfter'] = $startAfter;
+            }
+        }
+
+        return $out;
+    }
+
     /** A contact's dateUpdated as epoch-ms, tolerant of ISO strings or ms ints. */
     public function contactUpdatedMs(array $contact): int
     {
