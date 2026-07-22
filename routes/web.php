@@ -18,6 +18,7 @@ Route::middleware(['auth', 'admin'])->name('admin.')->group(function () {
     Route::get('/dashboards/{dashboard:slug}/metrics', [MetricController::class, 'index'])->name('dashboards.metrics.index');
     Route::delete('/dashboards/{dashboard}', [DashboardController::class, 'destroy'])->name('dashboards.destroy');
     Route::get('/table/data', [DashboardController::class, 'tableData'])->name('table.data');
+    Route::get('/table/distinct', [DashboardController::class, 'distinct'])->name('table.distinct');
 
     // Chart widgets.
     Route::post('/dashboards/{dashboard}/charts', [ChartController::class, 'store'])->name('charts.store');
@@ -33,6 +34,7 @@ Route::middleware(['auth', 'admin'])->name('admin.')->group(function () {
     // Integrations — generic connect / sync / disconnect for every provider.
     Route::get('/integrations', [IntegrationController::class, 'index'])->name('integrations.index');
     Route::post('/integrations', [IntegrationController::class, 'store'])->name('integrations.store');
+    Route::put('/integrations/{integration}', [IntegrationController::class, 'update'])->name('integrations.update');
     Route::post('/integrations/{integration}/sync', [IntegrationController::class, 'sync'])->name('integrations.sync');
     Route::delete('/integrations/{integration}', [IntegrationController::class, 'destroy'])->name('integrations.destroy');
 

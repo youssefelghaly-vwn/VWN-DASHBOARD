@@ -35,6 +35,7 @@
             'metricsStore' => route('admin.metrics.store', $dashboard->id),
             'metricsPreview' => route('admin.metrics.preview'),
             'tableData'    => route('admin.table.data'),
+            'distinctData' => route('admin.table.distinct'),
         ]))" x-init="boot()" class="px-6 lg:px-8 py-8">
 
         <div class="flex flex-wrap items-end justify-between gap-4 mb-7">
@@ -237,7 +238,7 @@
 
                     <div>
                         <label class="block text-xs font-semibold mb-1.5">Group-by source</label>
-                        <select x-model="builder.key" @change="builder.label_column = ''"
+                        <select x-model="builder.key" @change="builder.label_column = ''; builder.filters = []"
                                 class="w-full rounded-lg text-sm px-3 py-2"
                                 style="border:1px solid var(--line);background:var(--panel-alt);">
                             <template x-for="s in sources" :key="s.key">
@@ -257,6 +258,37 @@
                             </template>
                         </select>
                     </div>
+
+                    {{-- Pipeline → Stage cascading picker — scopes the whole chart to one
+                         pipeline (and optionally one kanban stage) when the source has them. --}}
+                    <template x-if="columnsFor(builder.key).includes('Pipeline')">
+                        <div class="col-span-2 grid grid-cols-2 gap-4 p-3 rounded-lg" style="background:var(--panel-alt);">
+                            <div>
+                                <label class="block text-xs font-semibold mb-1.5">Pipeline</label>
+                                <select :value="filterVal(builder.filters, 'Pipeline')"
+                                        @change="setFilterVal(builder.filters, 'Pipeline', $event.target.value); setFilterVal(builder.filters, 'Stage', '')"
+                                        class="w-full rounded-lg text-sm px-3 py-2"
+                                        style="border:1px solid var(--line);background:var(--panel);">
+                                    <option value="">— all pipelines —</option>
+                                    <template x-for="p in pipelineOptions(builder.key)" :key="p">
+                                        <option :value="p" x-text="p"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div x-show="filterVal(builder.filters, 'Pipeline')" x-cloak>
+                                <label class="block text-xs font-semibold mb-1.5">Stage (kanban card)</label>
+                                <select :value="filterVal(builder.filters, 'Stage')"
+                                        @change="setFilterVal(builder.filters, 'Stage', $event.target.value)"
+                                        class="w-full rounded-lg text-sm px-3 py-2"
+                                        style="border:1px solid var(--line);background:var(--panel);">
+                                    <option value="">— all stages —</option>
+                                    <template x-for="st in stageOptions(builder)" :key="st">
+                                        <option :value="st" x-text="st"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+                    </template>
                 </div>
 
                 {{-- SERIES --}}
@@ -474,8 +506,12 @@
             tableRows: [],
             tableQuery: '',
 
-            builder: { open: false, id: null, title: '', type: 'bar', key: '', label_column: '', limit: 10, series: [], error: '', saving: false },
+            builder: { open: false, id: null, title: '', type: 'bar', key: '', label_column: '', limit: 10, series: [], filters: [], error: '', saving: false },
             metric: { open: false, id: null, title: '', subtitle: '', mode: 'simple', format: 'number', decimals: 0, accent: false, simple: {}, varList: [], expression: '', preview: '—', previewError: '', previewing: false, error: '', saving: false },
+
+            // Pipeline/Stage cascading picker: distinct values are fetched once
+            // per source (or per source+pipeline for stages) and cached here.
+            distinctCache: {},
 
             get csrf() { return document.querySelector('meta[name=csrf-token]').content; },
 
@@ -502,7 +538,57 @@
             },
 
             blankSource() {
-                return { key: this.firstKey, agg: 'count', column: '', filter_column: '', filter_operator: 'eq', filter_value: '' };
+                return { key: this.firstKey, agg: 'count', column: '', filter_column: '', filter_operator: 'eq', filter_value: '', filters: [] };
+            },
+
+            /* ---------- Pipeline/Stage cascading picker ---------- */
+            filterVal(filters, column) {
+                const f = (filters || []).find(f => f.column === column);
+                return f ? f.value : '';
+            },
+
+            setFilterVal(filters, column, value, operator = 'eq') {
+                const i = filters.findIndex(f => f.column === column);
+                if (value === '' || value == null) {
+                    if (i !== -1) filters.splice(i, 1);
+                    return;
+                }
+                if (i !== -1) { filters[i].value = value; filters[i].operator = operator; }
+                else filters.push({ column, operator, value });
+            },
+
+            async fetchDistinct(key, column, scopes = []) {
+                if (!key) return [];
+                const { integration_id, dataset } = this.splitKey(key);
+                const url = new URL(this.cfg.distinctData, window.location.origin);
+                url.searchParams.set('integration_id', integration_id);
+                url.searchParams.set('dataset', dataset);
+                url.searchParams.set('column', column);
+                if (scopes.length) url.searchParams.set('filters', JSON.stringify(scopes));
+
+                const res = await fetch(url, { headers: { Accept: 'application/json' } });
+                return res.ok ? res.json() : [];
+            },
+
+            pipelineOptions(key) {
+                const cacheKey = key + '::Pipeline';
+                if (!(cacheKey in this.distinctCache)) {
+                    this.distinctCache[cacheKey] = [];
+                    this.fetchDistinct(key, 'Pipeline').then(vals => this.distinctCache[cacheKey] = vals);
+                }
+                return this.distinctCache[cacheKey];
+            },
+
+            stageOptions(bind) {
+                const pipeline = this.filterVal(bind.filters, 'Pipeline');
+                if (!pipeline) return [];
+
+                const cacheKey = bind.key + '::Stage::' + pipeline;
+                if (!(cacheKey in this.distinctCache)) {
+                    this.distinctCache[cacheKey] = [];
+                    this.fetchDistinct(bind.key, 'Stage', [{ column: 'Pipeline', value: pipeline }]).then(vals => this.distinctCache[cacheKey] = vals);
+                }
+                return this.distinctCache[cacheKey];
             },
 
             /* ---------- charts ---------- */
@@ -549,7 +635,7 @@
                     this.builder = {
                         open: true, id: null, title: '', type: 'bar', key: this.firstKey, label_column: '', limit: 10,
                         series: [{ key: this.firstKey, column: '', agg: 'count', label: 'Count' }],
-                        error: '', saving: false,
+                        filters: [], error: '', saving: false,
                     };
                     return;
                 }
@@ -563,6 +649,7 @@
                         key: (s.integration_id ?? c.config.integration_id) + '::' + (s.dataset ?? s.sheet ?? c.config.sheet),
                         column: s.column || '', agg: s.agg || 'count', label: s.label || 'Count', color: s.color,
                     })),
+                    filters: c.config.filters || [],
                     error: '', saving: false,
                 };
             },
@@ -581,6 +668,7 @@
                     label_column: this.builder.label_column,
                     aggregate: this.builder.series[0]?.agg || 'count',
                     limit: this.builder.limit,
+                    filters: this.builder.filters || [],
                     series: this.builder.series.map(s => {
                         const src = this.splitKey(s.key);
                         return { integration_id: src.integration_id, sheet: src.dataset, column: s.column, agg: s.agg, label: s.label, color: s.color };
@@ -642,12 +730,13 @@
                 const varList = Object.entries(cfg.variables || {}).map(([name, v]) => ({
                     name, key: keyOf(v), agg: v.agg || 'count', column: v.column || '',
                     filter_column: v.filter_column || '', filter_operator: v.filter_operator || 'eq', filter_value: v.filter_value || '',
+                    filters: v.filters || [],
                 }));
 
                 this.metric = {
                     open: true, id: m.id, title: cfg.title, subtitle: cfg.subtitle || '',
                     mode: cfg.mode, format: cfg.format, decimals: cfg.decimals, accent: Boolean(cfg.accent),
-                    simple: { key: cfg.integration_id + '::' + (cfg.sheet || ''), agg: cfg.agg || 'count', column: cfg.column || '', filter_column: cfg.filter_column || '', filter_operator: cfg.filter_operator || 'eq', filter_value: cfg.filter_value || '' },
+                    simple: { key: cfg.integration_id + '::' + (cfg.sheet || ''), agg: cfg.agg || 'count', column: cfg.column || '', filter_column: cfg.filter_column || '', filter_operator: cfg.filter_operator || 'eq', filter_value: cfg.filter_value || '', filters: cfg.filters || [] },
                     varList: varList.length ? varList : [{ name: 'a', ...this.blankSource() }],
                     expression: cfg.expression || '', preview: m.display, previewError: '', previewing: false, error: '', saving: false,
                 };
@@ -658,7 +747,7 @@
 
             sourceConfig(o) {
                 const src = this.splitKey(o.key);
-                return { integration_id: src.integration_id, sheet: src.dataset, agg: o.agg, column: o.column, filter_column: o.filter_column, filter_operator: o.filter_operator, filter_value: o.filter_value };
+                return { integration_id: src.integration_id, sheet: src.dataset, agg: o.agg, column: o.column, filter_column: o.filter_column, filter_operator: o.filter_operator, filter_value: o.filter_value, filters: o.filters || [] };
             },
 
             metricPayload() {

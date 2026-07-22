@@ -4,6 +4,7 @@ namespace App\Dashboard\Services;
 
 use App\Dashboard\Models\Chart;
 use App\Integration\Services\RecordReader;
+use App\Support\FiltersRows;
 
 /**
  * Turns saved Chart widgets into Chart.js-ready payloads, reading ONLY local
@@ -13,6 +14,8 @@ use App\Integration\Services\RecordReader;
  */
 class DashboardData
 {
+    use FiltersRows;
+
     public const PALETTE = [
         '#4FE3A6', '#EE9F4E', '#E2694F', '#7FA396',
         '#2E9E76', '#C97A2A', '#8FBFAE', '#D98A6F',
@@ -46,6 +49,7 @@ class DashboardData
             $dataset = $s['dataset'] ?? $s['sheet'] ?? $chart->sheet;
 
             $rows = $this->reader->rows($integrationId, $dataset);
+            $rows = $this->filterRows($rows, array_merge($chart->filters ?? [], $s['filters'] ?? []));
 
             $result = $this->aggregate(
                 $rows,
@@ -112,6 +116,7 @@ class DashboardData
                 'aggregate' => $chart->aggregate,
                 'limit' => $chart->limit,
                 'series' => $chart->series,
+                'filters' => $chart->filters ?? [],
             ],
         ];
     }

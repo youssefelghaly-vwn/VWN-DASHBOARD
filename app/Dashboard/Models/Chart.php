@@ -15,11 +15,12 @@ class Chart extends Model
 {
     protected $fillable = [
         'user_id', 'dashboard_id', 'integration_id', 'title', 'type', 'sheet',
-        'label_column', 'series', 'aggregate', 'limit', 'position', 'is_system',
+        'label_column', 'series', 'filters', 'aggregate', 'limit', 'position', 'is_system',
     ];
 
     protected $casts = [
         'series' => 'array',
+        'filters' => 'array',
         'is_system' => 'boolean',
     ];
 
