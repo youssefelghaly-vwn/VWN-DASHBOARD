@@ -6,14 +6,87 @@
         <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
         <style>
-            .tabulator { font-size: 12.5px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
-            .tabulator .tabulator-header { background:var(--panel-alt); border-bottom:1px solid var(--line); }
-            .tabulator .tabulator-col { background:var(--panel-alt); }
-            .tabulator-row.tabulator-row-even { background:rgba(0,0,0,0.015); }
-            .chip { display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:999px;
-                    font-size:11px; background:var(--panel-alt); border:1px solid var(--line); }
+            /* ---- Modern grid theme, tuned to the app palette ---- */
+            .sheet-grid { border:1px solid var(--line); border-radius:14px; overflow:hidden;
+                          box-shadow:0 1px 2px rgba(18,36,31,0.04), 0 8px 24px -12px rgba(18,36,31,0.10); }
+            .tabulator { background:var(--panel); border:0; font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); }
+            .tabulator, .tabulator * { box-sizing:border-box; }
+
+            /* Header */
+            .tabulator .tabulator-header { background:var(--panel); border-bottom:1.5px solid var(--line); color:var(--ink-soft); font-weight:600; }
+            .tabulator .tabulator-header .tabulator-col { background:transparent; border-right:1px solid transparent; }
+            .tabulator .tabulator-header .tabulator-col .tabulator-col-content { padding:11px 14px; }
+            .tabulator .tabulator-header .tabulator-col .tabulator-col-title {
+                font-size:10.5px; letter-spacing:0.7px; text-transform:uppercase; color:var(--ink-soft); font-weight:700; }
+            .tabulator .tabulator-header .tabulator-col.tabulator-sortable:hover { background:var(--panel-alt); }
+            .tabulator .tabulator-col .tabulator-col-sorter .tabulator-arrow { border-bottom-color:var(--ink-soft); }
+            .tabulator .tabulator-col.tabulator-sortable[aria-sort="ascending"],
+            .tabulator .tabulator-col.tabulator-sortable[aria-sort="descending"] { color:var(--mint-deep); }
+            .tabulator .tabulator-col.tabulator-sortable[aria-sort="ascending"] .tabulator-arrow { border-bottom-color:var(--mint-deep); }
+            .tabulator .tabulator-col.tabulator-sortable[aria-sort="descending"] .tabulator-arrow { border-top-color:var(--mint-deep); }
+
+            /* Header filter inputs */
+            .tabulator .tabulator-header-filter { padding:0 8px 8px; }
+            .tabulator .tabulator-header-filter input {
+                width:100%; font-size:12px; padding:5px 9px; border-radius:7px;
+                border:1px solid var(--line); background:var(--bg); color:var(--ink); transition:border-color .12s, box-shadow .12s; }
+            .tabulator .tabulator-header-filter input::placeholder { color:#A9B4AE; }
+            .tabulator .tabulator-header-filter input:focus { outline:none; border-color:var(--mint); box-shadow:0 0 0 3px rgba(79,227,166,0.18); }
+
+            /* Rows */
+            .tabulator .tabulator-row { border-bottom:1px solid #F0ECDE; min-height:0; }
+            .tabulator .tabulator-row .tabulator-cell { padding:10px 14px; border-right:0; line-height:1.35; }
+            .tabulator .tabulator-row.tabulator-row-even { background:rgba(18,36,31,0.018); }
+            .tabulator .tabulator-row:hover { background:rgba(79,227,166,0.10) !important; }
+            .tabulator .tabulator-row .tabulator-cell.num { font-variant-numeric:tabular-nums; color:var(--ink); }
+            .tabulator .tabulator-cell.lookup-cell { color:var(--mint-deep); font-weight:500; }
+
+            /* Group headers */
+            .tabulator .tabulator-row.tabulator-group {
+                background:rgba(79,227,166,0.10); border-bottom:1px solid var(--line);
+                padding:9px 14px; font-weight:600; color:var(--mint-deep); }
+            .tabulator .tabulator-row.tabulator-group span { color:var(--ink-soft); font-weight:500; }
+
+            /* Totals (bottom calc) */
+            .tabulator .tabulator-row.tabulator-calcs { background:var(--panel-alt) !important; border-top:1.5px solid var(--line); font-weight:700; }
+
+            /* Footer / pagination */
+            .tabulator .tabulator-footer { background:var(--panel); border-top:1px solid var(--line); color:var(--ink-soft); padding:8px 10px; }
+            .tabulator .tabulator-footer .tabulator-page {
+                border-radius:7px; border:1px solid var(--line); background:var(--panel); color:var(--ink); margin:0 2px; padding:4px 10px; font-size:12px; }
+            .tabulator .tabulator-footer .tabulator-page:not(.disabled):hover { background:var(--panel-alt); }
+            .tabulator .tabulator-footer .tabulator-page.active { background:var(--mint-deep); color:#fff; border-color:var(--mint-deep); }
+            .tabulator .tabulator-footer .tabulator-page.disabled { opacity:.4; }
+            .tabulator .tabulator-footer .tabulator-page-size { border-radius:7px; border:1px solid var(--line); padding:3px 6px; background:var(--panel); }
+
+            /* Placeholder + thin scrollbars */
+            .tabulator .tabulator-placeholder .tabulator-placeholder-contents { color:var(--ink-soft); font-size:13px; }
+            .tabulator .tabulator-tableholder::-webkit-scrollbar { height:10px; width:10px; }
+            .tabulator .tabulator-tableholder::-webkit-scrollbar-thumb { background:var(--line); border-radius:8px; border:2px solid var(--panel); }
+            .tabulator .tabulator-tableholder::-webkit-scrollbar-track { background:transparent; }
+
+            /* Row-number gutter */
+            .tabulator .rownum { color:#9AA7A0; background:var(--panel-alt); font-size:11px; font-variant-numeric:tabular-nums; }
+            .tabulator .tabulator-col.rownum .tabulator-col-title { color:#9AA7A0; }
+
+            /* Frozen columns */
+            .tabulator .tabulator-col.tabulator-frozen, .tabulator .tabulator-row .tabulator-cell.tabulator-frozen { background:inherit; }
+            .tabulator .tabulator-frozen.tabulator-frozen-left { border-right:1px solid var(--line); box-shadow:4px 0 8px -6px rgba(18,36,31,0.25); }
+
+            /* Header menu popup (appended to body — style globally) */
+            .tabulator-menu { border:1px solid var(--line); border-radius:10px; padding:4px; background:var(--panel);
+                              box-shadow:0 10px 30px -10px rgba(18,36,31,0.30); font-size:13px; }
+            .tabulator-menu .tabulator-menu-item { border-radius:7px; padding:7px 11px; color:var(--ink); }
+            .tabulator-menu .tabulator-menu-item:hover { background:var(--panel-alt); }
+            .tabulator .tabulator-header-popup-button { color:var(--ink-soft); padding:0 6px; }
+            .tabulator .tabulator-header-popup-button:hover { color:var(--mint-deep); }
+
+            /* Chips + tabs */
+            .chip { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px;
+                    font-size:11px; background:var(--panel); border:1px solid var(--line); }
             .chip button { line-height:1; opacity:.5; } .chip button:hover { opacity:1; }
-            .sheet-tab { border:1px solid var(--line); background:var(--panel); }
+            .sheet-tab { border:1px solid var(--line); background:var(--panel); transition:all .12s; }
+            .sheet-tab:hover { border-color:var(--mint); }
             .sheet-tab.is-active { background:rgba(79,227,166,0.14); border-color:var(--mint-deep); color:var(--mint-deep); font-weight:600; }
             [x-cloak]{ display:none !important; }
         </style>
@@ -57,6 +130,18 @@
             </template>
         </div>
 
+        {{-- Empty state — data is available but no sheets exist yet. --}}
+        <template x-if="sources.length && !sheets.length">
+            <div class="text-center py-20 rounded-2xl" style="border:1px dashed var(--line);color:var(--ink-soft);">
+                <div class="text-4xl mb-3">▦</div>
+                <p class="display text-lg font-semibold mb-1" style="color:var(--ink);">No sheets yet</p>
+                <p class="text-sm mb-5">Open any synced table as a spreadsheet — then filter, look up, and chart it.</p>
+                <button @click="openNewSheet()" class="px-5 py-2.5 rounded-lg text-sm font-semibold text-white" style="background:var(--mint-deep);">
+                    + Create your first sheet
+                </button>
+            </div>
+        </template>
+
         {{-- ============ Active sheet ============ --}}
         <div x-show="active" x-cloak>
             {{-- Toolbar --}}
@@ -81,6 +166,27 @@
                        style="border:1px solid var(--line);background:var(--panel);">
                     <input type="checkbox" x-model="totals" @change="rebuild(); persist()"> Totals
                 </label>
+
+                <div class="relative" @click.outside="columnsMenuOpen=false">
+                    <button @click="columnsMenuOpen=!columnsMenuOpen" class="px-3 py-2 rounded-lg text-sm font-medium"
+                            style="border:1px solid var(--line);background:var(--panel);">▦ Columns</button>
+                    <div x-show="columnsMenuOpen" x-cloak
+                         class="absolute z-30 mt-1 w-64 max-h-80 overflow-auto rounded-xl p-2"
+                         style="background:var(--panel);border:1px solid var(--line);box-shadow:0 10px 30px -10px rgba(18,36,31,0.30);">
+                        <div class="flex justify-between items-center px-1.5 pb-2 mb-1 text-[11px]"
+                             style="color:var(--ink-soft);border-bottom:1px solid var(--line);">
+                            <button @click="showAllColumns()" class="hover:underline font-medium">Show all</button>
+                            <span x-text="(columns.length - hidden.length) + ' / ' + columns.length + ' shown'"></span>
+                        </div>
+                        <template x-for="col in columns" :key="'vis'+col">
+                            <label class="flex items-center gap-2 px-1.5 py-1.5 text-[12.5px] rounded-md cursor-pointer"
+                                   onmouseover="this.style.background='var(--panel-alt)'" onmouseout="this.style.background=''">
+                                <input type="checkbox" :checked="!hidden.includes(col)" @change="toggleColumn(col)">
+                                <span x-text="col" class="truncate"></span>
+                            </label>
+                        </template>
+                    </div>
+                </div>
 
                 <button @click="openLookup()" class="px-3 py-2 rounded-lg text-sm font-medium"
                         style="border:1px solid var(--line);background:var(--panel);">🔗 Add lookup</button>
@@ -116,7 +222,7 @@
             <div class="relative">
                 <div x-show="loading" class="absolute inset-0 z-10 flex items-center justify-center text-sm"
                      style="background:rgba(255,255,255,0.6);color:var(--ink-soft);">Loading…</div>
-                <div id="grid"></div>
+                <div id="grid" class="sheet-grid"></div>
             </div>
             <p class="text-[11px] mt-2" style="color:var(--ink-soft);" x-text="rowCountLabel"></p>
 
@@ -327,9 +433,10 @@
 
             // View state (mirrors active.config; persisted on change).
             search: '', conditions: [], group: '', totals: false, lookups: [], charts: [],
+            sort: [], hidden: [], frozen: [], order: [],
 
             // Modal + builders.
-            modal: null, formError: '', lkError: '', chError: '',
+            modal: null, columnsMenuOpen: false, formError: '', lkError: '', chError: '',
             form: { name: '', key: '' },
             draft: [], draftMatch: 'all',
             lk: { name: '', key: '', local_key: '', foreign_key: '', return_column: '' },
@@ -398,6 +505,11 @@
                 this.totals = !!c.totals;
                 this.lookups = c.lookups || [];
                 this.charts = c.charts || [];
+                this.sort = c.sort || [];
+                this.hidden = c.hidden || [];
+                this.frozen = c.frozen || [];
+                this.order = c.order || [];
+                this.columnsMenuOpen = false;
 
                 await this.$nextTick();
                 this.rebuild();
@@ -434,30 +546,96 @@
             /* ---------- grid ---------- */
             rebuild() {
                 this.table?.destroy();
+                this._ready = false;
                 const el = document.getElementById('grid');
                 if (!el) return;
+                const self = this;
 
-                const cols = this.data.columns.map(col => {
-                    const def = { title: col, field: col, headerFilter: 'input', headerFilterPlaceholder: '🔍', minWidth: 110 };
-                    if (this.data.lookups.includes(col)) def.headerFilterPlaceholder = '🔗';
-                    if (this.totals) def.bottomCalc = this.isNumeric(col) ? 'sum' : 'count';
+                // Respect the user's saved column order; new columns fall to the end.
+                const ordered = [...this.data.columns].sort((a, b) => {
+                    const ia = this.order.indexOf(a), ib = this.order.indexOf(b);
+                    if (ia === -1 && ib === -1) return 0;
+                    if (ia === -1) return 1;
+                    if (ib === -1) return -1;
+                    return ia - ib;
+                });
+
+                const rownum = {
+                    title: '#', field: '__rownum', formatter: 'rownum', hozAlign: 'center',
+                    width: 54, frozen: true, headerSort: false, resizable: false, cssClass: 'rownum',
+                };
+
+                const cols = ordered.map(col => {
+                    const numeric = this.isNumeric(col);
+                    const isLookup = this.data.lookups.includes(col);
+                    const def = {
+                        title: col, field: col,
+                        visible: !this.hidden.includes(col),
+                        frozen: this.frozen.includes(col),
+                        headerFilter: 'input',
+                        headerFilterPlaceholder: isLookup ? '🔗 filter' : 'filter…',
+                        headerFilterLiveFilter: true,
+                        minWidth: 120,
+                        hozAlign: numeric ? 'right' : 'left',
+                        headerHozAlign: numeric ? 'right' : 'left',
+                        cssClass: numeric ? 'num' : (isLookup ? 'lookup-cell' : ''),
+                        tooltip: true,
+                        headerMenu: this.columnMenu(),
+                    };
+                    if (this.totals) def.bottomCalc = numeric ? 'sum' : 'count';
                     return def;
                 });
 
                 this.table = new Tabulator(el, {
                     data: this.data.rows,
-                    columns: cols,
-                    layout: 'fitData',
-                    height: '560px',
+                    columns: [rownum, ...cols],
+                    layout: 'fitDataStretch',
+                    height: '600px',
                     nestedFieldSeparator: false,
                     movableColumns: true,
+                    columnDefaults: { resizable: 'header' },
+                    initialSort: (this.sort || []).map(s => ({ column: s.column, dir: s.dir })),
                     pagination: true, paginationSize: 100, paginationSizeSelector: [50, 100, 250, 500],
-                    placeholder: 'No rows',
+                    placeholder: 'No rows match your filters.',
                 });
 
-                this.table.on('tableBuilt', () => this.applyView());
+                this.table.on('tableBuilt', () => { this._ready = true; this.applyView(); });
                 this.table.on('dataFiltered', () => this.drawCharts());
+                this.table.on('dataSorted', (sorters) => {
+                    if (!self._ready) return;
+                    self.sort = sorters.map(s => ({ column: s.field, dir: s.dir })).filter(s => s.column && s.column !== '__rownum');
+                    self.persist();
+                });
+                this.table.on('columnMoved', () => {
+                    if (!self._ready) return;
+                    self.order = self.table.getColumns().map(c => c.getField()).filter(f => f && f !== '__rownum');
+                    self.persist();
+                });
             },
+
+            // Right-click / header-icon menu — Excel-style per-column actions.
+            columnMenu() {
+                const self = this;
+                return [
+                    { label: '↑  Sort ascending', action: (e, col) => self.table.setSort(col.getField(), 'asc') },
+                    { label: '↓  Sort descending', action: (e, col) => self.table.setSort(col.getField(), 'desc') },
+                    { label: '📌  Freeze / unfreeze', action: (e, col) => self.toggleFreeze(col.getField()) },
+                    { label: '🚫  Hide column', action: (e, col) => self.hideColumn(col.getField()) },
+                ];
+            },
+            toggleFreeze(field) {
+                this.frozen = this.frozen.includes(field) ? this.frozen.filter(f => f !== field) : [...this.frozen, field];
+                this.persist(); this.rebuild();
+            },
+            hideColumn(field) {
+                if (!this.hidden.includes(field)) this.hidden = [...this.hidden, field];
+                this.persist(); this.rebuild();
+            },
+            toggleColumn(col) {
+                this.hidden = this.hidden.includes(col) ? this.hidden.filter(c => c !== col) : [...this.hidden, col];
+                this.persist(); this.rebuild();
+            },
+            showAllColumns() { this.hidden = []; this.persist(); this.rebuild(); },
 
             applyView() {
                 if (!this.table) return;
@@ -644,6 +822,7 @@
                 const config = {
                     search: this.search, match: this.matchMode, conditions: this.conditions,
                     group: this.group, totals: this.totals, lookups: this.lookups, charts: this.charts,
+                    sort: this.sort, hidden: this.hidden, frozen: this.frozen, order: this.order,
                 };
                 if (this.active) this.active.config = config;
                 await fetch(`${cfg.dataUrl}/${this.activeId}`, {
