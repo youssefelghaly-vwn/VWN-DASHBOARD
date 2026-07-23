@@ -6,14 +6,71 @@
         <script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6.3.1/dist/js/tabulator.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
         <style>
-            .tabulator { font-size: 12.5px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
-            .tabulator .tabulator-header { background:var(--panel-alt); border-bottom:1px solid var(--line); }
-            .tabulator .tabulator-col { background:var(--panel-alt); }
-            .tabulator-row.tabulator-row-even { background:rgba(0,0,0,0.015); }
-            .chip { display:inline-flex; align-items:center; gap:6px; padding:3px 9px; border-radius:999px;
-                    font-size:11px; background:var(--panel-alt); border:1px solid var(--line); }
+            /* ---- Modern grid theme, tuned to the app palette ---- */
+            .sheet-grid { border:1px solid var(--line); border-radius:14px; overflow:hidden;
+                          box-shadow:0 1px 2px rgba(18,36,31,0.04), 0 8px 24px -12px rgba(18,36,31,0.10); }
+            .tabulator { background:var(--panel); border:0; font-family:'Inter',sans-serif; font-size:13px; color:var(--ink); }
+            .tabulator, .tabulator * { box-sizing:border-box; }
+
+            /* Header */
+            .tabulator .tabulator-header { background:var(--panel); border-bottom:1.5px solid var(--line); color:var(--ink-soft); font-weight:600; }
+            .tabulator .tabulator-header .tabulator-col { background:transparent; border-right:1px solid transparent; }
+            .tabulator .tabulator-header .tabulator-col .tabulator-col-content { padding:11px 14px; }
+            .tabulator .tabulator-header .tabulator-col .tabulator-col-title {
+                font-size:10.5px; letter-spacing:0.7px; text-transform:uppercase; color:var(--ink-soft); font-weight:700; }
+            .tabulator .tabulator-header .tabulator-col.tabulator-sortable:hover { background:var(--panel-alt); }
+            .tabulator .tabulator-col .tabulator-col-sorter .tabulator-arrow { border-bottom-color:var(--ink-soft); }
+            .tabulator .tabulator-col.tabulator-sortable[aria-sort="ascending"],
+            .tabulator .tabulator-col.tabulator-sortable[aria-sort="descending"] { color:var(--mint-deep); }
+            .tabulator .tabulator-col.tabulator-sortable[aria-sort="ascending"] .tabulator-arrow { border-bottom-color:var(--mint-deep); }
+            .tabulator .tabulator-col.tabulator-sortable[aria-sort="descending"] .tabulator-arrow { border-top-color:var(--mint-deep); }
+
+            /* Header filter inputs */
+            .tabulator .tabulator-header-filter { padding:0 8px 8px; }
+            .tabulator .tabulator-header-filter input {
+                width:100%; font-size:12px; padding:5px 9px; border-radius:7px;
+                border:1px solid var(--line); background:var(--bg); color:var(--ink); transition:border-color .12s, box-shadow .12s; }
+            .tabulator .tabulator-header-filter input::placeholder { color:#A9B4AE; }
+            .tabulator .tabulator-header-filter input:focus { outline:none; border-color:var(--mint); box-shadow:0 0 0 3px rgba(79,227,166,0.18); }
+
+            /* Rows */
+            .tabulator .tabulator-row { border-bottom:1px solid #F0ECDE; min-height:0; }
+            .tabulator .tabulator-row .tabulator-cell { padding:10px 14px; border-right:0; line-height:1.35; }
+            .tabulator .tabulator-row.tabulator-row-even { background:rgba(18,36,31,0.018); }
+            .tabulator .tabulator-row:hover { background:rgba(79,227,166,0.10) !important; }
+            .tabulator .tabulator-row .tabulator-cell.num { font-variant-numeric:tabular-nums; color:var(--ink); }
+            .tabulator .tabulator-cell.lookup-cell { color:var(--mint-deep); font-weight:500; }
+
+            /* Group headers */
+            .tabulator .tabulator-row.tabulator-group {
+                background:rgba(79,227,166,0.10); border-bottom:1px solid var(--line);
+                padding:9px 14px; font-weight:600; color:var(--mint-deep); }
+            .tabulator .tabulator-row.tabulator-group span { color:var(--ink-soft); font-weight:500; }
+
+            /* Totals (bottom calc) */
+            .tabulator .tabulator-row.tabulator-calcs { background:var(--panel-alt) !important; border-top:1.5px solid var(--line); font-weight:700; }
+
+            /* Footer / pagination */
+            .tabulator .tabulator-footer { background:var(--panel); border-top:1px solid var(--line); color:var(--ink-soft); padding:8px 10px; }
+            .tabulator .tabulator-footer .tabulator-page {
+                border-radius:7px; border:1px solid var(--line); background:var(--panel); color:var(--ink); margin:0 2px; padding:4px 10px; font-size:12px; }
+            .tabulator .tabulator-footer .tabulator-page:not(.disabled):hover { background:var(--panel-alt); }
+            .tabulator .tabulator-footer .tabulator-page.active { background:var(--mint-deep); color:#fff; border-color:var(--mint-deep); }
+            .tabulator .tabulator-footer .tabulator-page.disabled { opacity:.4; }
+            .tabulator .tabulator-footer .tabulator-page-size { border-radius:7px; border:1px solid var(--line); padding:3px 6px; background:var(--panel); }
+
+            /* Placeholder + thin scrollbars */
+            .tabulator .tabulator-placeholder .tabulator-placeholder-contents { color:var(--ink-soft); font-size:13px; }
+            .tabulator .tabulator-tableholder::-webkit-scrollbar { height:10px; width:10px; }
+            .tabulator .tabulator-tableholder::-webkit-scrollbar-thumb { background:var(--line); border-radius:8px; border:2px solid var(--panel); }
+            .tabulator .tabulator-tableholder::-webkit-scrollbar-track { background:transparent; }
+
+            /* Chips + tabs */
+            .chip { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px;
+                    font-size:11px; background:var(--panel); border:1px solid var(--line); }
             .chip button { line-height:1; opacity:.5; } .chip button:hover { opacity:1; }
-            .sheet-tab { border:1px solid var(--line); background:var(--panel); }
+            .sheet-tab { border:1px solid var(--line); background:var(--panel); transition:all .12s; }
+            .sheet-tab:hover { border-color:var(--mint); }
             .sheet-tab.is-active { background:rgba(79,227,166,0.14); border-color:var(--mint-deep); color:var(--mint-deep); font-weight:600; }
             [x-cloak]{ display:none !important; }
         </style>
@@ -116,7 +173,7 @@
             <div class="relative">
                 <div x-show="loading" class="absolute inset-0 z-10 flex items-center justify-center text-sm"
                      style="background:rgba(255,255,255,0.6);color:var(--ink-soft);">Loading…</div>
-                <div id="grid"></div>
+                <div id="grid" class="sheet-grid"></div>
             </div>
             <p class="text-[11px] mt-2" style="color:var(--ink-soft);" x-text="rowCountLabel"></p>
 
@@ -438,21 +495,33 @@
                 if (!el) return;
 
                 const cols = this.data.columns.map(col => {
-                    const def = { title: col, field: col, headerFilter: 'input', headerFilterPlaceholder: '🔍', minWidth: 110 };
-                    if (this.data.lookups.includes(col)) def.headerFilterPlaceholder = '🔗';
-                    if (this.totals) def.bottomCalc = this.isNumeric(col) ? 'sum' : 'count';
+                    const numeric = this.isNumeric(col);
+                    const isLookup = this.data.lookups.includes(col);
+                    const def = {
+                        title: col, field: col,
+                        headerFilter: 'input',
+                        headerFilterPlaceholder: isLookup ? '🔗 filter' : 'filter…',
+                        headerFilterLiveFilter: true,
+                        minWidth: 120,
+                        hozAlign: numeric ? 'right' : 'left',
+                        headerHozAlign: numeric ? 'right' : 'left',
+                        cssClass: numeric ? 'num' : (isLookup ? 'lookup-cell' : ''),
+                        tooltip: true,
+                    };
+                    if (this.totals) def.bottomCalc = numeric ? 'sum' : 'count';
                     return def;
                 });
 
                 this.table = new Tabulator(el, {
                     data: this.data.rows,
                     columns: cols,
-                    layout: 'fitData',
-                    height: '560px',
+                    layout: 'fitDataStretch',
+                    height: '600px',
                     nestedFieldSeparator: false,
                     movableColumns: true,
+                    columnDefaults: { resizable: 'header' },
                     pagination: true, paginationSize: 100, paginationSizeSelector: [50, 100, 250, 500],
-                    placeholder: 'No rows',
+                    placeholder: 'No rows match your filters.',
                 });
 
                 this.table.on('tableBuilt', () => this.applyView());
