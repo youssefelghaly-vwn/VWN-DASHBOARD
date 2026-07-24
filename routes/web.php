@@ -8,6 +8,8 @@ use App\Http\Controllers\ProfileController;
 use App\Integration\Controllers\IntegrationController;
 use App\Menu\Controllers\MenuController;
 use App\Sheet\Controllers\SheetController;
+use App\Team\Controllers\InvitationController;
+use App\Team\Controllers\TeamController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'admin'])->name('admin.')->group(function () {
@@ -50,6 +52,12 @@ Route::middleware(['auth', 'admin'])->name('admin.')->group(function () {
     Route::get('/data-health', [DataHealthController::class, 'index'])->name('data-health');
     Route::post('/data-health/{integration}/sync', [DataHealthController::class, 'sync'])->name('data-health.sync');
 
+    // Team — invite members by email; they set their own password on accept.
+    Route::get('/team', [TeamController::class, 'index'])->name('team.index');
+    Route::post('/team/invite', [TeamController::class, 'invite'])->name('team.invite');
+    Route::post('/team/{user}/resend', [TeamController::class, 'resend'])->name('team.resend');
+    Route::delete('/team/{user}', [TeamController::class, 'destroy'])->name('team.destroy');
+
     // Menu management.
     Route::get('/menu', [MenuController::class, 'index'])->name('menu.index');
     Route::post('/menu', [MenuController::class, 'store'])->name('menu.store');
@@ -60,6 +68,12 @@ Route::middleware(['auth', 'admin'])->name('admin.')->group(function () {
 Route::get('/dashboard', fn () => redirect()->route('admin.dashboard'))
     ->middleware('auth')
     ->name('dashboard');
+
+// Accepting an invitation — public: the emailed token is the credential.
+Route::middleware('guest')->group(function () {
+    Route::get('/invite/{token}', [InvitationController::class, 'show'])->name('invitations.show');
+    Route::post('/invite/{token}', [InvitationController::class, 'store'])->name('invitations.store');
+});
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
