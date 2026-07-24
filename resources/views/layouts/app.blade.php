@@ -80,6 +80,7 @@
                     ['route' => 'admin.sheets.index',       'label' => 'Sheets',       'icon' => '▦'],
                     ['route' => 'admin.integrations.index', 'label' => 'Integrations', 'icon' => '🔌'],
                     ['route' => 'admin.data-health',        'label' => 'Data Health',  'icon' => '❤'],
+                    ['route' => 'admin.team.index',         'label' => 'Team',         'icon' => '👥'],
                     ['route' => 'admin.menu.index',         'label' => 'Menu',         'icon' => '☰'],
                 ];
             @endphp
