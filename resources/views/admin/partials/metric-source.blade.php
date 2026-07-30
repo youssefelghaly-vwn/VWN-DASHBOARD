@@ -6,7 +6,7 @@
     `key` is the composite integration+dataset source (integration_id::dataset).
     Used for a simple metric (bind="metric.simple") and per formula variable.
 --}}
-<div class="grid grid-cols-12 gap-2">
+<div class="">
     <div class="col-span-3">
         <label class="block text-[10px] mb-1" style="color:var(--ink-soft);">Source</label>
         <select x-model="{{ $bind }}.key"

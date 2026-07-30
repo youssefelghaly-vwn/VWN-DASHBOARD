@@ -191,19 +191,32 @@ class GoHighLevelProvider implements IntegrationProvider
     private function fetchUsers(Integration $i, SyncContext $context): array
     {
         try {
-            $rows = $this->client->paginate($i, '/users/', 'users', ['locationId' => $i->credential('location_id')], ['limitParam' => 'limit']);
+            // GET /users/ returns every user for the location in a single
+            // response and rejects unknown query params — so no pagination and
+            // no `limit` (which is what made this 422 before).
+            $body = $this->client->get($i, '/users/', [
+                'locationId' => $i->credential('location_id'),
+            ]);
+
+            $rows = $body['users'] ?? [];
         } catch (\Throwable $e) {
             $context->fail('Users', $e->getMessage());
 
             return [];
         }
 
-        return array_map(fn ($u) => [
+        $users = array_map(fn ($u) => [
             '_id' => $u['id'] ?? null,
             'Name' => $this->str(trim(($u['firstName'] ?? '').' '.($u['lastName'] ?? '')) ?: ($u['name'] ?? '—')),
             'Email' => $this->str($u['email'] ?? ''),
             'Role' => $this->str($u['roles']['role'] ?? ($u['role'] ?? '')),
+            'Deleted' => ($u['deleted'] ?? false) ? 'Yes' : 'No',
         ], $rows);
+
+        // Drop id-less users: pluck('Name', '_id') would file them under the ""
+        // key, which is also what $userNames[null] resolves to — so every
+        // unassigned opportunity would inherit a real person's name.
+        return array_values(array_filter($users, fn ($u) => $u['_id'] !== null));
     }
 
     private function fetchPipelines(Integration $i, SyncContext $context): array
