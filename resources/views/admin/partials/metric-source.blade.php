@@ -102,6 +102,9 @@
             <option value="not_contains">does not contain</option>
             <option value="gt">greater than</option>
             <option value="lt">less than</option>
+            <option value="has_all">has all of (comma-sep)</option>
+            <option value="has_any">has any of (comma-sep)</option>
+            <option value="not_has_any">has none of (comma-sep)</option>
             <option value="not_empty">is not empty</option>
             <option value="empty">is empty</option>
         </select>
@@ -111,8 +114,69 @@
          x-show="{{ $bind }}.filter_column && !['not_empty','empty'].includes({{ $bind }}.filter_operator)"
          x-cloak>
         <label class="block text-[10px] mb-1" style="color:var(--ink-soft);">Value</label>
-        <input x-model="{{ $bind }}.filter_value" placeholder="e.g. Booked"
+        <input x-model="{{ $bind }}.filter_value"
+               :placeholder="['has_all','has_any','not_has_any'].includes({{ $bind }}.filter_operator) ? 'e.g. 1st Email, 1st Linked-IN' : 'e.g. Booked'"
                class="w-full rounded text-xs px-2 py-1.5"
                style="border:1px solid var(--line);background:var(--panel);">
+        <p class="mt-1 text-[10px] leading-tight" style="color:var(--ink-soft);"
+           x-show="['has_all','has_any','not_has_any'].includes({{ $bind }}.filter_operator)" x-cloak>
+            For multi-value fields (e.g. Outreach Stages). Separate values with commas —
+            <strong>has all</strong> matches rows containing every value, <strong>has any</strong> matches at least one.
+        </p>
+    </div>
+
+    {{-- EXTRA CONDITIONS — any number of {column, operator, value} rules, all
+         ANDed with the filter above and with the Pipeline/Stage picker. This is
+         what lets one metric say "Owner = <SDR> AND Outreach Stages has_any
+         1st Call". Reserved Pipeline/Stage rows (owned by the picker above) are
+         hidden here so the two editors don't fight over the same list. --}}
+    <div class="col-span-12 mt-1">
+        <div class="flex items-center justify-between mb-1">
+            <label class="block text-[10px]" style="color:var(--ink-soft);">Extra conditions (all must match)</label>
+            <button type="button"
+                    @click="({{ $bind }}.filters = {{ $bind }}.filters || []).push({ column: '', operator: 'eq', value: '' })"
+                    class="text-[10px] px-2 py-1 rounded-md font-medium"
+                    style="border:1px solid var(--line);background:var(--panel);">+ Add condition</button>
+        </div>
+
+        <template x-for="(cond, ci) in ({{ $bind }}.filters || [])" :key="ci">
+            <div class="grid grid-cols-12 gap-2 items-end mb-1.5"
+                 x-show="!['Pipeline','Stage'].includes(cond.column)" x-cloak>
+                <div class="col-span-4">
+                    <select x-model="cond.column" class="w-full rounded text-xs px-2 py-1.5"
+                            style="border:1px solid var(--line);background:var(--panel);">
+                        <option value="">— column —</option>
+                        <template x-for="col in columnsFor({{ $bind }}.key)" :key="col">
+                            <option :value="col" x-text="col"></option>
+                        </template>
+                    </select>
+                </div>
+                <div class="col-span-4">
+                    <select x-model="cond.operator" class="w-full rounded text-xs px-2 py-1.5"
+                            style="border:1px solid var(--line);background:var(--panel);">
+                        <option value="eq">equals</option>
+                        <option value="neq">does not equal</option>
+                        <option value="contains">contains</option>
+                        <option value="not_contains">does not contain</option>
+                        <option value="gt">greater than</option>
+                        <option value="lt">less than</option>
+                        <option value="has_all">has all of (comma-sep)</option>
+                        <option value="has_any">has any of (comma-sep)</option>
+                        <option value="not_has_any">has none of (comma-sep)</option>
+                        <option value="not_empty">is not empty</option>
+                        <option value="empty">is empty</option>
+                    </select>
+                </div>
+                <div class="col-span-3" x-show="!['not_empty','empty'].includes(cond.operator)" x-cloak>
+                    <input x-model="cond.value" placeholder="value"
+                           class="w-full rounded text-xs px-2 py-1.5"
+                           style="border:1px solid var(--line);background:var(--panel);">
+                </div>
+                <div class="col-span-1">
+                    <button type="button" @click="{{ $bind }}.filters.splice(ci, 1)"
+                            class="text-sm" style="color:var(--coral);">✕</button>
+                </div>
+            </div>
+        </template>
     </div>
 </div>

@@ -17,7 +17,7 @@ class ChartController extends Controller
 
     private const AGGS = ['count', 'sum', 'avg', 'min', 'max'];
 
-    private const OPS = ['eq', 'neq', 'contains', 'not_contains', 'gt', 'lt', 'not_empty', 'empty'];
+    private const OPS = ['eq', 'neq', 'contains', 'not_contains', 'gt', 'lt', 'has_all', 'has_any', 'not_has_any', 'not_empty', 'empty'];
 
     public function store(Request $request, Dashboard $dashboard, DashboardData $data)
     {
@@ -57,7 +57,7 @@ class ChartController extends Controller
             'filters' => ['nullable', 'array'],
             'filters.*.column' => ['nullable', 'string'],
             'filters.*.operator' => ['nullable', 'in:'.implode(',', self::OPS)],
-            'filters.*.value' => ['nullable', 'string', 'max:120'],
+            'filters.*.value' => ['nullable', 'string', 'max:255'],
             'series' => ['required', 'array', 'min:1'],
             'series.*.integration_id' => ['nullable', 'integer', 'exists:integrations,id'],
             'series.*.sheet' => ['required', 'string'],

@@ -271,7 +271,9 @@ dependencies:
 sync(integration, context)
  ├─ users      = fetchUsers()             (also used to resolve assignee names)
  ├─ pipelines  = fetchPipelines()         GET /opportunities/pipelines?locationId=…
- ├─ cfMap      = fetchCustomFieldMap()    GET /locations/{id}/customFields   (Contacts only)
+ ├─ cfMap      = fetchCustomFieldMap()    GET /locations/{id}/customFields?model=contact|opportunity
+ │                                        (one call per needed model, merged → both contact and
+ │                                         opportunity custom-field ids resolve to column names)
  │
  ├─ if Opportunities:
  │     ├─ context.write('Pipeline Stages', pipelineStageRows(pipelines))   ← written FIRST

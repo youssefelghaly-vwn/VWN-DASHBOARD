@@ -294,6 +294,54 @@
                             </div>
                         </div>
                     </template>
+
+                    {{-- CONDITIONS — arbitrary {column, operator, value} filters ANDed
+                         onto the whole chart (on top of the Pipeline/Stage picker).
+                         Lets a chart say "group by Owner WHERE Outreach Stages
+                         has_any 1st Call". Reserved Pipeline/Stage rows (owned by the
+                         picker above) are hidden here. --}}
+                    <div class="col-span-2 p-3 rounded-lg" style="background:var(--panel-alt);">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="block text-xs font-semibold">Conditions (all must match)</label>
+                            <button type="button"
+                                    @click="(builder.filters = builder.filters || []).push({ column: '', operator: 'eq', value: '' })"
+                                    class="text-[11px] px-2.5 py-1 rounded-md font-medium"
+                                    style="border:1px solid var(--line);background:var(--panel);">+ Add condition</button>
+                        </div>
+
+                        <template x-for="(cond, ci) in (builder.filters || [])" :key="ci">
+                            <div class="grid grid-cols-12 gap-2 items-center mb-2"
+                                 x-show="!['Pipeline','Stage'].includes(cond.column)" x-cloak>
+                                <select x-model="cond.column" class="col-span-4 rounded text-xs px-2 py-1.5"
+                                        style="border:1px solid var(--line);background:var(--panel);">
+                                    <option value="">— column —</option>
+                                    <template x-for="col in columnsFor(builder.key)" :key="col">
+                                        <option :value="col" x-text="col"></option>
+                                    </template>
+                                </select>
+                                <select x-model="cond.operator" class="col-span-4 rounded text-xs px-2 py-1.5"
+                                        style="border:1px solid var(--line);background:var(--panel);">
+                                    <option value="eq">equals</option>
+                                    <option value="neq">does not equal</option>
+                                    <option value="contains">contains</option>
+                                    <option value="not_contains">does not contain</option>
+                                    <option value="gt">greater than</option>
+                                    <option value="lt">less than</option>
+                                    <option value="has_all">has all of (comma-sep)</option>
+                                    <option value="has_any">has any of (comma-sep)</option>
+                                    <option value="not_has_any">has none of (comma-sep)</option>
+                                    <option value="not_empty">is not empty</option>
+                                    <option value="empty">is empty</option>
+                                </select>
+                                <input x-model="cond.value" placeholder="value"
+                                       x-show="!['not_empty','empty'].includes(cond.operator)"
+                                       class="col-span-3 rounded text-xs px-2 py-1.5"
+                                       style="border:1px solid var(--line);background:var(--panel);">
+                                <button type="button" @click="builder.filters.splice(ci, 1)"
+                                        class="col-span-1 text-sm" style="color:var(--coral);">✕</button>
+                            </div>
+                        </template>
+                    </div>
                 </div>
 
                 {{-- SERIES --}}

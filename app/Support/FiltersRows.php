@@ -43,11 +43,51 @@ trait FiltersRows
                 'not_contains' => $needle === '' || ! str_contains($hay, $needle),
                 'gt' => $num !== null && $need !== null && $num > $need,
                 'lt' => $num !== null && $need !== null && $num < $need,
+                // Multi-value (array) fields: the cell is a comma-separated list
+                // (e.g. Outreach Stages "1st Email, 1st Linked-IN") and so is the
+                // needle. has_all = every needle token present; has_any = at
+                // least one present. Order-independent, matched token-by-token.
+                'has_all' => $this->listHasAll($raw, $needle),
+                'has_any' => $this->listHasAny($raw, $needle),
+                'not_has_any' => ! $this->listHasAny($raw, $needle),
                 'not_empty' => $hay !== '',
                 'empty' => $hay === '',
                 default => true,
             };
         }));
+    }
+
+    /** Split a comma-separated cell/needle into lowercased, trimmed, non-empty tokens. */
+    private function listTokens(mixed $v): array
+    {
+        $parts = array_map(
+            fn ($p) => mb_strtolower(trim((string) $p)),
+            explode(',', (string) $v)
+        );
+
+        return array_values(array_filter($parts, fn ($p) => $p !== ''));
+    }
+
+    private function listHasAll(mixed $cell, mixed $needle): bool
+    {
+        $want = $this->listTokens($needle);
+
+        if ($want === []) {
+            return false;
+        }
+
+        return array_diff($want, $this->listTokens($cell)) === [];
+    }
+
+    private function listHasAny(mixed $cell, mixed $needle): bool
+    {
+        $want = $this->listTokens($needle);
+
+        if ($want === []) {
+            return false;
+        }
+
+        return array_intersect($want, $this->listTokens($cell)) !== [];
     }
 
     private function filterNumeric(mixed $v): ?float

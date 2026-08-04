@@ -93,7 +93,19 @@ class GoHighLevelProvider implements IntegrationProvider
         $userNames = collect($users)->pluck('Name', '_id')->all();
 
         $pipelines = $wants('Opportunities') ? $this->fetchPipelines($integration, $context) : [];
-        $cfMap = $wants('Contacts') ? $this->fetchCustomFieldMap($integration, $context) : [];
+
+        // Custom-field labels are keyed by "model" in GHL (contact vs
+        // opportunity), so pull only the models we actually need. Both
+        // Contacts and Opportunities store their custom values by field id
+        // only — this map is what turns an opaque id into a real column name.
+        $cfModels = [];
+        if ($wants('Contacts')) {
+            $cfModels[] = 'contact';
+        }
+        if ($wants('Opportunities')) {
+            $cfModels[] = 'opportunity';
+        }
+        $cfMap = $cfModels ? $this->fetchCustomFieldMap($integration, $context, $cfModels) : [];
 
         if ($wants('Opportunities')) {
             // The full pipeline/stage catalogue — every stage of every pipeline,
@@ -109,7 +121,7 @@ class GoHighLevelProvider implements IntegrationProvider
 
             $this->guard($context, 'Opportunities', fn () => $context->write(
                 'Opportunities',
-                $this->rows($this->fetchOpportunities($integration, $pipelines, $userNames))
+                $this->rows($this->fetchOpportunities($integration, $pipelines, $userNames, $cfMap))
             ));
         }
 
@@ -159,7 +171,7 @@ class GoHighLevelProvider implements IntegrationProvider
     private function baseColumns(string $dataset): array
     {
         return match ($dataset) {
-            'Opportunities' => ['Pipeline', 'Stage', 'Status', 'Monetary Value', 'Assigned User', 'Contact', 'Source', 'Created', 'Updated'],
+            'Opportunities' => ['Pipeline', 'Stage', 'Status', 'Monetary Value', 'Owner', 'Assigned User', 'Contact', 'Company', 'Email', 'Phone', 'Contact Tags', 'Source', 'Created', 'Updated'],
             'Contacts' => ['Name', 'Email', 'Phone', 'Company', 'Type', 'Tags', 'Source', 'Assigned User', 'Country', 'Website', 'Created', 'Updated'],
             'Appointments' => ['Calendar', 'Status', 'Assigned User', 'Contact', 'Start', 'End', 'Created'],
             'Users' => ['Name', 'Email', 'Role'],
@@ -265,29 +277,46 @@ class GoHighLevelProvider implements IntegrationProvider
         return $rows;
     }
 
-    private function fetchCustomFieldMap(Integration $i, SyncContext $context): array
+    /**
+     * Map of {custom-field id → display name}, merged across the requested GHL
+     * models ('contact' and/or 'opportunity'). GHL stores custom-field values
+     * on both contacts and opportunities keyed by id only, so this map is what
+     * turns an opaque id like "vZVi0DXoQn2QRdlzQlNM" into a column such as
+     * "Outreach Stages". Contact and opportunity fields live under different
+     * models, hence one call per model, merged.
+     *
+     * @param  array<int, string>  $models
+     */
+    private function fetchCustomFieldMap(Integration $i, SyncContext $context, array $models = ['contact']): array
     {
-        try {
-            $body = $this->client->get($i, '/locations/'.$i->credential('location_id').'/customFields');
-        } catch (\Throwable $e) {
-            $context->fail('CustomFields', $e->getMessage());
-
-            return [];
-        }
-
-        $defs = $body['customFields'] ?? $body['customField'] ?? [];
         $map = [];
 
-        foreach ($defs as $f) {
-            $id = $f['id'] ?? null;
-            if (! $id) {
+        foreach ($models as $model) {
+            try {
+                $body = $this->client->get(
+                    $i,
+                    '/locations/'.$i->credential('location_id').'/customFields',
+                    $model ? ['model' => $model] : []
+                );
+            } catch (\Throwable $e) {
+                $context->fail('CustomFields', $e->getMessage());
+
                 continue;
             }
 
-            $name = $f['name'] ?? (isset($f['fieldKey']) ? $this->prettifyKey($f['fieldKey']) : null);
+            $defs = $body['customFields'] ?? $body['customField'] ?? [];
 
-            if ($name) {
-                $map[$id] = $name;
+            foreach ($defs as $f) {
+                $id = $f['id'] ?? null;
+                if (! $id) {
+                    continue;
+                }
+
+                $name = $f['name'] ?? (isset($f['fieldKey']) ? $this->prettifyKey($f['fieldKey']) : null);
+
+                if ($name) {
+                    $map[$id] = $name;
+                }
             }
         }
 
@@ -301,29 +330,74 @@ class GoHighLevelProvider implements IntegrationProvider
         return Str::of($tail)->replace(['_', '-'], ' ')->title()->toString();
     }
 
-    private function fetchOpportunities(Integration $i, array $pipelines, array $userNames): array
+    private function fetchOpportunities(Integration $i, array $pipelines, array $userNames, array $cfMap = []): array
     {
         $rows = $this->client->searchOpportunities($i);
 
-        return array_map(function ($o) use ($pipelines, $userNames) {
+        return array_map(function ($o) use ($pipelines, $userNames, $cfMap) {
             $pid = $o['pipelineId'] ?? null;
             $sid = $o['pipelineStageId'] ?? ($o['stageId'] ?? null);
             $assn = $o['assignedTo'] ?? null;
 
             $contact = $o['contact']['name'] ?? $o['contactName'] ?? $o['name'] ?? '';
+            $owner = $this->str($userNames[$assn] ?? 'Unassigned');
 
-            return [
+            $base = [
                 'Pipeline' => $this->str($pipelines[$pid]['name'] ?? 'Unspecified'),
                 'Stage' => $this->str($pipelines[$pid]['stages'][$sid] ?? 'Unspecified'),
                 'Status' => $this->str(ucfirst($o['status'] ?? '')),
                 'Monetary Value' => $this->num($o['monetaryValue'] ?? 0),
-                'Assigned User' => $this->str($userNames[$assn] ?? 'Unassigned'),
+                // "Owner" is GHL's own label for the assignee; keep the existing
+                // "Assigned User" column too so older charts/metrics keep working.
+                'Owner' => $owner,
+                'Assigned User' => $owner,
                 'Contact' => $this->str($contact),
+                'Company' => $this->str($o['contact']['companyName'] ?? ''),
+                'Email' => $this->str($o['contact']['email'] ?? ''),
+                'Phone' => $this->str($o['contact']['phone'] ?? ''),
+                'Contact Tags' => $this->str($o['contact']['tags'] ?? []),
                 'Source' => $this->str($o['source'] ?? ''),
                 'Created' => $this->date($o['createdAt'] ?? null),
                 'Updated' => $this->date($o['updatedAt'] ?? null),
             ];
+
+            // Union keeps base columns authoritative if a custom field happens
+            // to share one of their names.
+            return $base + $this->opportunityCustomFields($o, $cfMap);
         }, $rows);
+    }
+
+    /**
+     * Flatten an opportunity's `customFields` into named columns, resolving each
+     * opaque field id to its label via $cfMap. Single-value fields land as
+     * strings; multi-select array fields (e.g. "Outreach Stages" →
+     * ["1st Email", "1st Linked-IN"]) are joined into a comma-separated string,
+     * which the `has_all` / `has_any` filter operators match token-by-token.
+     *
+     * @return array<string, string>
+     */
+    private function opportunityCustomFields(array $o, array $cfMap): array
+    {
+        $out = [];
+
+        foreach ($o['customFields'] ?? [] as $cf) {
+            $id = $cf['id'] ?? null;
+            $name = $id ? ($cfMap[$id] ?? null) : null;
+
+            if ($name === null) {
+                continue;
+            }
+
+            $value = $cf['fieldValueArray']
+                ?? $cf['fieldValueString']
+                ?? $cf['fieldValue']
+                ?? $cf['value']
+                ?? '';
+
+            $out[$this->str($name)] = $this->str($value);
+        }
+
+        return $out;
     }
 
     /**
