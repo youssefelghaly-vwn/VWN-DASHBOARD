@@ -146,6 +146,35 @@ class LoopStatisticsTest extends TestCase
         $this->assertDatabaseMissing('loop_statistics', ['id' => $loop->id]);
     }
 
+    public function test_editing_a_loop_reapplies_new_templates_to_every_value(): void
+    {
+        $admin = $this->admin();
+        $dash = Dashboard::create(['name' => 'Exec']);
+        $this->storeLoop($admin, $dash)->assertCreated();
+
+        // 3 owners × 1 metric template = 3 generated metrics.
+        $this->assertSame(3, Metric::whereNotNull('loop_id')->count());
+
+        $loop = LoopStatistic::first();
+
+        // Edit: add a second metric template and rename the loop.
+        $this->app->forgetScopedInstances();
+        $this->actingAs($admin)->putJson("/loops/{$loop->id}", [
+            'name' => 'SDR — Outreach', 'integration_id' => $this->integration->id,
+            'dataset' => 'Opportunities', 'column' => 'Owner',
+            'metrics' => [
+                $this->smsTemplate(),
+                ['title' => 'Total', 'mode' => 'simple', 'integration_id' => $this->integration->id, 'sheet' => 'Opportunities', 'agg' => 'count', 'format' => 'number', 'decimals' => 0, 'filters' => []],
+            ],
+            'charts' => [],
+        ])->assertOk();
+
+        // 3 owners × 2 templates = 6 metrics now; parent section renamed.
+        $this->assertSame(6, Metric::whereNotNull('loop_id')->count());
+        $this->assertSame('SDR — Outreach', $loop->fresh()->name);
+        $this->assertDatabaseHas('dashboard_sections', ['id' => $loop->section_id, 'title' => 'SDR — Outreach']);
+    }
+
     public function test_formula_template_is_scoped_per_owner_in_every_variable(): void
     {
         $admin = $this->admin();

@@ -65,6 +65,36 @@ class LoopController extends Controller
         ], 201);
     }
 
+    public function update(Request $request, LoopStatistic $loop)
+    {
+        $data = $this->validated($request);
+
+        // Keep the same parent section, just rename it to match.
+        if ($loop->section) {
+            $loop->section->update(['title' => $data['name']]);
+        }
+
+        $loop->update([
+            'name' => $data['name'],
+            'integration_id' => $data['integration_id'] ?? null,
+            'dataset' => $data['dataset'],
+            'column' => $data['column'],
+            'value_operator' => $data['value_operator'] ?? null,
+            'value_match' => $data['value_match'] ?? null,
+            'templates' => [
+                'metrics' => array_values($request->input('metrics', [])),
+                'charts' => array_values($request->input('charts', [])),
+            ],
+        ]);
+
+        $result = $this->expander->expand($loop, (int) $request->user()->id);
+
+        return response()->json([
+            'loops' => $this->payload($loop->dashboard),
+            'result' => $result,
+        ]);
+    }
+
     public function refresh(Request $request, LoopStatistic $loop)
     {
         $result = $this->expander->expand($loop, (int) $request->user()->id);
@@ -92,10 +122,12 @@ class LoopController extends Controller
                 'id' => $l->id,
                 'name' => $l->name,
                 'section_id' => $l->section_id,
+                'integration_id' => $l->integration_id,
                 'dataset' => $l->dataset,
                 'column' => $l->column,
                 'value_operator' => $l->value_operator,
                 'value_match' => $l->value_match,
+                'templates' => $l->templates ?? ['metrics' => [], 'charts' => []],
                 'values' => count($this->expander->distinctValues($l)),
             ])->all();
     }

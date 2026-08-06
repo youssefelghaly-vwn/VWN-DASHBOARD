@@ -53,7 +53,9 @@
         <div class="col-span-12 grid grid-cols-12 gap-2">
             <div class="col-span-6">
                 <label class="block text-[10px] mb-1" style="color:var(--ink-soft);">Pipeline</label>
-                <select :value="filterVal({{ $bind }}.filters, 'Pipeline')"
+                {{-- Options load async; re-apply the saved value after they render
+                     (and whenever they change) so edits show the right pipeline. --}}
+                <select x-effect="pipelineOptions({{ $bind }}.key); $nextTick(() => $el.value = filterVal({{ $bind }}.filters, 'Pipeline'))"
                         @change="setFilterVal({{ $bind }}.filters, 'Pipeline', $event.target.value); setFilterVal({{ $bind }}.filters, 'Stage', '')"
                         class="w-full rounded text-xs px-2 py-1.5"
                         style="border:1px solid var(--line);background:var(--panel);">
@@ -65,7 +67,7 @@
             </div>
             <div class="col-span-6" x-show="filterVal({{ $bind }}.filters, 'Pipeline')" x-cloak>
                 <label class="block text-[10px] mb-1" style="color:var(--ink-soft);">Stage (kanban card)</label>
-                <select :value="filterVal({{ $bind }}.filters, 'Stage')"
+                <select x-effect="stageOptions({{ $bind }}); $nextTick(() => $el.value = filterVal({{ $bind }}.filters, 'Stage'))"
                         @change="setFilterVal({{ $bind }}.filters, 'Stage', $event.target.value)"
                         class="w-full rounded text-xs px-2 py-1.5"
                         style="border:1px solid var(--line);background:var(--panel);">

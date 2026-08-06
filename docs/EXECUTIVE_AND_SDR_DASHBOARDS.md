@@ -302,6 +302,10 @@ owner. Formula templates are scoped in **every** variable, so per-owner rates
 are correct.
 
 **Maintaining a loop** — a chip appears under the Layout toolbar for each loop:
+- **✎ Edit** re-opens the builder pre-filled with the loop's column, filter and
+  templates. Add/remove/change any metric or chart template and **Save changes** —
+  the new set is re-applied to **every** value at once (so you never edit each
+  owner's tiles individually).
 - **⟳ Refresh** re-expands it: new owners get their sub-section + tiles, removed
   ones disappear. Run it after a sync adds people.
 - **✕ Delete** removes the loop and everything it generated.

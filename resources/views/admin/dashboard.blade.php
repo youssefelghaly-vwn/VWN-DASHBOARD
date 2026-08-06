@@ -114,6 +114,7 @@
                       style="border:1px solid var(--line);background:var(--panel);">
                     <span class="font-semibold" x-text="lp.name"></span>
                     <span style="color:var(--ink-soft);" x-text="'· ' + lp.column + ' (' + lp.values + ')'"></span>
+                    <button @click="editLoop(lp)" title="Edit loop (templates apply to all)" class="hover:opacity-100 opacity-60">✎</button>
                     <button @click="refreshLoop(lp)" title="Refresh — pick up new values" class="hover:opacity-100 opacity-60">⟳</button>
                     <button @click="deleteLoop(lp)" title="Delete loop" class="hover:opacity-100 opacity-60" style="color:var(--coral);">✕</button>
                 </span>
@@ -371,7 +372,7 @@
                         <div class="col-span-2 grid grid-cols-2 gap-4 p-3 rounded-lg" style="background:var(--panel-alt);">
                             <div>
                                 <label class="block text-xs font-semibold mb-1.5">Pipeline</label>
-                                <select :value="filterVal(builder.filters, 'Pipeline')"
+                                <select x-effect="pipelineOptions(builder.key); $nextTick(() => $el.value = filterVal(builder.filters, 'Pipeline'))"
                                         @change="setFilterVal(builder.filters, 'Pipeline', $event.target.value); setFilterVal(builder.filters, 'Stage', '')"
                                         class="w-full rounded-lg text-sm px-3 py-2"
                                         style="border:1px solid var(--line);background:var(--panel);">
@@ -383,7 +384,7 @@
                             </div>
                             <div x-show="filterVal(builder.filters, 'Pipeline')" x-cloak>
                                 <label class="block text-xs font-semibold mb-1.5">Stage (kanban card)</label>
-                                <select :value="filterVal(builder.filters, 'Stage')"
+                                <select x-effect="stageOptions(builder); $nextTick(() => $el.value = filterVal(builder.filters, 'Stage'))"
                                         @change="setFilterVal(builder.filters, 'Stage', $event.target.value)"
                                         class="w-full rounded-lg text-sm px-3 py-2"
                                         style="border:1px solid var(--line);background:var(--panel);">
@@ -651,11 +652,12 @@
              style="background:rgba(14,33,29,0.55);"
              @click.self="closeLoop()" @keydown.escape.window="loop.open && closeLoop()">
             <div class="rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-auto" style="background:var(--panel);">
-                <h3 class="display text-lg font-bold mb-1">Loop statistics</h3>
+                <h3 class="display text-lg font-bold mb-1" x-text="loop.id ? 'Edit loop statistics' : 'Loop statistics'"></h3>
                 <p class="text-[12px] mb-5" style="color:var(--ink-soft);">
                     Pick a column (e.g. <b>Owner</b>) and it repeats every template metric &amp; chart below
                     for each distinct value — each in its own sub-section, scoped with
                     <span class="mono">{column} = value</span>.
+                    <span x-show="loop.id" x-cloak>Saving re-applies the templates to <b>every</b> value.</span>
                 </p>
 
                 <div class="grid grid-cols-2 gap-4 mb-5">
@@ -750,7 +752,7 @@
                     <button @click="closeLoop()" class="px-4 py-2 rounded-lg text-sm font-medium" style="border:1px solid var(--line);">Cancel</button>
                     <button @click="saveLoop()" :disabled="loop.saving"
                             class="px-5 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50" style="background:var(--mint-deep);">
-                        <span x-text="loop.saving ? 'Building…' : 'Build loop'"></span>
+                        <span x-text="loop.saving ? 'Saving…' : (loop.id ? 'Save changes' : 'Build loop')"></span>
                     </button>
                 </div>
             </div>
@@ -785,7 +787,7 @@
 
             builder: { open: false, id: null, title: '', type: 'bar', key: '', label_column: '', limit: 10, series: [], filters: [], section_id: '', width: 'full', height: null, error: '', saving: false },
             metric: { open: false, id: null, title: '', subtitle: '', mode: 'simple', format: 'number', decimals: 0, accent: false, section_id: '', simple: {}, varList: [], expression: '', preview: '—', previewError: '', previewing: false, error: '', saving: false, captureToLoop: false, templateIndex: null },
-            loop: { open: false, name: '', key: '', column: '', valueOp: '', valueVal: '', metricTemplates: [], chartTemplates: [], error: '', saving: false },
+            loop: { open: false, id: null, name: '', key: '', column: '', valueOp: '', valueVal: '', metricTemplates: [], chartTemplates: [], error: '', saving: false },
 
             // Pipeline/Stage cascading picker: distinct values are fetched once
             // per source (or per source+pipeline for stages) and cached here.
@@ -825,9 +827,23 @@
             // over any dataset. Loop column options come from the chosen source.
             openLoop() {
                 this.loop = {
-                    open: true, name: '', key: this.firstKey, column: '',
+                    open: true, id: null, name: '', key: this.firstKey, column: '',
                     valueOp: '', valueVal: '',
                     metricTemplates: [], chartTemplates: [], error: '', saving: false,
+                };
+            },
+
+            // Edit an existing loop: hydrate the builder from its stored config and
+            // templates (converting stored payloads back into editor snapshots).
+            editLoop(lp) {
+                this.loop = {
+                    open: true, id: lp.id, name: lp.name,
+                    key: (lp.integration_id ?? '') + '::' + (lp.dataset || ''),
+                    column: lp.column,
+                    valueOp: lp.value_operator || '', valueVal: lp.value_match || '',
+                    metricTemplates: (lp.templates?.metrics || []).map(p => this.metricEditorFromConfig(p)),
+                    chartTemplates: (lp.templates?.charts || []).map(p => this.chartEditorFromConfig(p)),
+                    error: '', saving: false,
                 };
             },
 
@@ -915,8 +931,9 @@
                     charts: this.loop.chartTemplates.map(t => this.buildChartPayload(t)),
                 };
 
-                const res = await fetch(this.cfg.loopsStore, {
-                    method: 'POST',
+                const editing = Boolean(this.loop.id);
+                const res = await fetch(editing ? `/loops/${this.loop.id}` : this.cfg.loopsStore, {
+                    method: editing ? 'PUT' : 'POST',
                     headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': this.csrf },
                     body: JSON.stringify(payload),
                 });
@@ -1296,21 +1313,46 @@
                     return;
                 }
 
-                const cfg = m.config;
-                const keyOf = (o) => (o.integration_id ?? cfg.integration_id) + '::' + (o.sheet || '');
+                this.metric = {
+                    open: true, id: m.id, ...this.metricEditorFromConfig(m.config),
+                    preview: m.display, previewError: '', previewing: false, error: '', saving: false,
+                };
+            },
+
+            // Build the metric-editor object from a config/payload (server metric
+            // config OR a stored loop template — both share this shape). Used by
+            // openMetric, loop-template editing, and loop hydration.
+            metricEditorFromConfig(cfg) {
+                cfg = cfg || {};
+                const keyOf = (o) => (o.integration_id ?? cfg.integration_id ?? '') + '::' + (o.sheet || '');
                 const varList = Object.entries(cfg.variables || {}).map(([name, v]) => ({
                     name, key: keyOf(v), agg: v.agg || 'count', column: v.column || '',
                     filter_column: v.filter_column || '', filter_operator: v.filter_operator || 'eq', filter_value: v.filter_value || '',
                     filters: v.filters || [],
                 }));
 
-                this.metric = {
-                    open: true, id: m.id, title: cfg.title, subtitle: cfg.subtitle || '',
-                    mode: cfg.mode, format: cfg.format, decimals: cfg.decimals, accent: Boolean(cfg.accent),
-                    section_id: (cfg.section_id ?? m.section_id) != null ? String(cfg.section_id ?? m.section_id) : '',
-                    simple: { key: cfg.integration_id + '::' + (cfg.sheet || ''), agg: cfg.agg || 'count', column: cfg.column || '', filter_column: cfg.filter_column || '', filter_operator: cfg.filter_operator || 'eq', filter_value: cfg.filter_value || '', filters: cfg.filters || [] },
+                return {
+                    title: cfg.title || '', subtitle: cfg.subtitle || '',
+                    mode: cfg.mode || 'simple', format: cfg.format || 'number', decimals: cfg.decimals ?? 0, accent: Boolean(cfg.accent),
+                    section_id: cfg.section_id != null ? String(cfg.section_id) : '',
+                    simple: { key: (cfg.integration_id ?? '') + '::' + (cfg.sheet || ''), agg: cfg.agg || 'count', column: cfg.column || '', filter_column: cfg.filter_column || '', filter_operator: cfg.filter_operator || 'eq', filter_value: cfg.filter_value || '', filters: cfg.filters || [] },
                     varList: varList.length ? varList : [{ name: 'a', ...this.blankSource() }],
-                    expression: cfg.expression || '', preview: m.display, previewError: '', previewing: false, error: '', saving: false,
+                    expression: cfg.expression || '',
+                };
+            },
+
+            // Build the chart-builder object from a stored loop template payload
+            // (the shape buildChartPayload emits).
+            chartEditorFromConfig(c) {
+                c = c || {};
+                return {
+                    title: c.title || '', type: c.type || 'bar',
+                    key: (c.integration_id ?? '') + '::' + (c.sheet || ''),
+                    label_column: c.label_column || '', limit: c.limit ?? 10,
+                    series: (c.series || []).map(s => ({ key: (s.integration_id ?? c.integration_id ?? '') + '::' + (s.sheet ?? c.sheet ?? ''), column: s.column || '', agg: s.agg || 'count', label: s.label || 'Count', color: s.color })),
+                    filters: c.filters || [],
+                    section_id: c.section_id != null ? String(c.section_id) : '',
+                    width: c.width || 'full', height: c.height || null,
                 };
             },
 
