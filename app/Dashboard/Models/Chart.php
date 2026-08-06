@@ -14,8 +14,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Chart extends Model
 {
     protected $fillable = [
-        'user_id', 'dashboard_id', 'integration_id', 'title', 'type', 'sheet',
-        'label_column', 'series', 'filters', 'aggregate', 'limit', 'position', 'is_system',
+        'user_id', 'dashboard_id', 'section_id', 'integration_id', 'title', 'type', 'sheet',
+        'label_column', 'series', 'filters', 'aggregate', 'limit', 'width', 'height', 'position', 'is_system',
     ];
 
     protected $casts = [

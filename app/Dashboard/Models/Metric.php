@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Metric extends Model
 {
     protected $fillable = [
-        'user_id', 'dashboard_id', 'integration_id', 'title', 'mode', 'sheet',
+        'user_id', 'dashboard_id', 'section_id', 'integration_id', 'title', 'mode', 'sheet',
         'agg', 'column', 'filter_column', 'filter_operator', 'filter_value', 'filters',
         'expression', 'variables', 'format', 'decimals', 'subtitle', 'accent', 'position',
     ];
