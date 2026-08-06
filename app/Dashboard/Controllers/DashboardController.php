@@ -8,8 +8,11 @@ use App\Dashboard\Models\Metric;
 use App\Dashboard\Models\Section;
 use App\Dashboard\Services\DashboardData;
 use App\Http\Controllers\Controller;
+use App\Integration\Jobs\SyncIntegrationJob;
+use App\Integration\Models\Integration;
 use App\Integration\Services\RecordReader;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -41,7 +44,41 @@ class DashboardController extends Controller
             'dashboard' => $dashboard,
             'schema' => $reader->schema(),
             'charts' => $dashboard->charts,
+            'syncStatus' => $this->syncSnapshot(),
         ]);
+    }
+
+    /**
+     * A small "how fresh is the data" snapshot for the dashboard header —
+     * the most recent sync across all integrations, plus connected counts.
+     */
+    private function syncSnapshot(): array
+    {
+        $max = Integration::max('last_synced_at');
+        $at = $max ? Carbon::parse($max) : null;
+
+        return [
+            'at' => $at?->toIso8601String(),
+            'human' => $at?->diffForHumans(),
+            'connected' => (int) Integration::where('status', 'connected')->count(),
+            'total' => (int) Integration::count(),
+        ];
+    }
+
+    /** JSON version of the snapshot — polled by the dashboard to live-update. */
+    public function syncStatus()
+    {
+        return response()->json($this->syncSnapshot());
+    }
+
+    /** Queue a sync for every connected integration (the header "Sync now" button). */
+    public function syncAll()
+    {
+        Integration::where('status', 'connected')->each(
+            fn (Integration $i) => SyncIntegrationJob::dispatch($i->id)
+        );
+
+        return response()->json($this->syncSnapshot());
     }
 
     public function chartData(Dashboard $dashboard, DashboardData $data)
