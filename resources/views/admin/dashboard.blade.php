@@ -2,6 +2,20 @@
 <x-app-layout :title="$dashboard?->name ?? 'Dashboard'">
     @push('head')
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+        <style>
+            /* Chart cards live on a 6-column grid on large screens; each card's
+               width (full/two-thirds/half/third) is a column span set via a
+               data attribute so it works without a Tailwind rebuild. */
+            .chart-grid { display:grid; grid-template-columns:1fr; gap:1rem; }
+            .chart-card { grid-column: span 1; }
+            @media (min-width:1024px) {
+                .chart-grid { grid-template-columns:repeat(6,minmax(0,1fr)); }
+                .chart-card[data-w="full"]      { grid-column: span 6; }
+                .chart-card[data-w="twothirds"] { grid-column: span 4; }
+                .chart-card[data-w="half"]      { grid-column: span 3; }
+                .chart-card[data-w="third"]     { grid-column: span 2; }
+            }
+        </style>
     @endpush
 
     @if (! $dashboard)
@@ -36,6 +50,9 @@
             'metricsPreview' => route('admin.metrics.preview'),
             'tableData'    => route('admin.table.data'),
             'distinctData' => route('admin.table.distinct'),
+            'sectionsIndex' => route('admin.dashboards.sections.index', $dashboard->slug),
+            'sectionsStore' => route('admin.sections.store', $dashboard->id),
+            'layoutSave'   => route('admin.dashboards.layout', $dashboard->id),
         ]))" x-init="boot()" class="px-6 lg:px-8 py-8">
 
         <div class="flex flex-wrap items-end justify-between gap-4 mb-7">
@@ -71,65 +88,97 @@
             </div>
         </template>
 
-        {{-- ============================ METRICS ============================ --}}
-        <div class="flex items-center justify-between mb-3">
-            <span class="text-[10.5px] font-bold uppercase tracking-[1.5px]" style="color:var(--mint-deep);">Metrics</span>
-            <button @click="openMetric()" :disabled="!sources.length"
-                    class="text-xs px-3 py-1.5 rounded-md font-medium disabled:opacity-40"
-                    style="border:1px solid var(--line);background:var(--panel);">+ New metric</button>
+        {{-- ============================ LAYOUT (sections + widgets) ============================ --}}
+        <div class="flex items-center justify-between mb-4">
+            <span class="text-[10.5px] font-bold uppercase tracking-[1.5px]" style="color:var(--mint-deep);">Layout</span>
+            <div class="flex gap-2">
+                <button @click="addSection()" :disabled="!sources.length"
+                        class="text-xs px-3 py-1.5 rounded-md font-medium disabled:opacity-40"
+                        style="border:1px solid var(--line);background:var(--panel);">+ Add section</button>
+                <button @click="openMetric()" :disabled="!sources.length"
+                        class="text-xs px-3 py-1.5 rounded-md font-medium disabled:opacity-40"
+                        style="border:1px solid var(--line);background:var(--panel);">+ New metric</button>
+            </div>
         </div>
 
-        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-9">
-            <template x-for="m in metrics" :key="m.id">
-                <div class="rounded-xl p-4 relative group"
-                     :style="m.accent ? 'background:var(--sidebar);border:1px solid var(--sidebar);' : 'background:var(--panel);border:1px solid var(--line);'">
-                    <button @click="openMetric(m.id)"
-                            class="absolute top-2.5 right-2.5 text-sm opacity-0 group-hover:opacity-60 transition"
-                            :style="m.accent ? 'color:#fff;' : ''" title="Configure metric">⚙</button>
-                    <div class="text-[11px] uppercase tracking-wide mb-2.5"
-                         :style="m.accent ? 'color:#8FAFA3;' : 'color:var(--ink-soft);'" x-text="m.title"></div>
-                    <div class="display text-[30px] font-bold leading-none"
-                         :style="m.accent ? 'color:#fff;' : ''" x-text="m.display"></div>
-                    <div class="text-[11.5px] mt-2 font-semibold"
-                         :style="m.error ? 'color:var(--coral);' : (m.accent ? 'color:var(--mint);' : 'color:var(--mint-deep);')"
-                         x-text="m.error || m.subtitle || ''"></div>
-                </div>
-            </template>
-
-            <template x-if="!metrics.length && !loading && sources.length">
-                <div class="col-span-full text-center text-xs py-8 rounded-xl"
-                     style="border:1px dashed var(--line);color:var(--ink-soft);">
-                    No metrics yet. Add counts, sums, or formulas like
-                    <span class="mono" style="color:var(--mint-deep);">{won} / {messaged} * 100</span>.
-                </div>
-            </template>
-        </div>
-
-        {{-- ============================ CHARTS ============================ --}}
-        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <template x-for="c in charts" :key="c.id">
-                <div class="rounded-xl p-5" style="background:var(--panel);border:1px solid var(--line);">
-                    <div class="flex items-start justify-between mb-3">
-                        <div>
-                            <h3 class="display text-[14.5px] font-semibold uppercase tracking-wide" x-text="c.title"></h3>
-                            <p class="text-[11.5px] mt-0.5" style="color:var(--ink-soft);"
-                               x-text="c.config.sheet + ' · grouped by ' + c.config.label_column"></p>
+        {{-- One template renders every "group": the ungrouped bucket first, then
+             each section and its sub-sections in order. Each group draws its own
+             metrics grid + charts grid, filtered by section id. --}}
+        <template x-for="g in orderedGroups()" :key="g.key">
+            <div :class="(g.type === 'ungrouped' && !metricsIn(null).length && !chartsIn(null).length && (metrics.length || charts.length)) ? '' : 'mb-9'">
+                {{-- Section header (hr + title + controls). Ungrouped has none. --}}
+                <template x-if="g.type === 'section'">
+                    <div class="flex items-center gap-3 mb-3" :class="g.level ? 'pl-5' : ''">
+                        <span class="display font-semibold whitespace-nowrap"
+                              :class="g.level ? 'text-[13px]' : 'text-base'"
+                              :style="g.level ? 'color:var(--ink-soft);' : ''"
+                              x-text="g.section.title"></span>
+                        <div class="flex-1" style="height:1px;background:var(--line);"></div>
+                        <div class="flex items-center gap-1.5 text-xs" style="color:var(--ink-soft);">
+                            <button @click="moveSection(g.section, -1)" title="Move section up" class="hover:opacity-100 opacity-60">↑</button>
+                            <button @click="moveSection(g.section, 1)" title="Move section down" class="hover:opacity-100 opacity-60">↓</button>
+                            <button x-show="!g.level" @click="addSubSection(g.section.id)" title="Add sub-section"
+                                    class="hover:opacity-100 opacity-60 font-medium">+ sub</button>
+                            <button @click="renameSection(g.section)" title="Rename" class="hover:opacity-100 opacity-60">✎</button>
+                            <button @click="deleteSection(g.section)" title="Delete section" class="hover:opacity-100 opacity-60" style="color:var(--coral);">🗑</button>
                         </div>
-                        <button @click="openBuilder(c.id)"
-                                class="text-lg leading-none transition hover:opacity-100 opacity-40"
-                                title="Configure chart">⚙</button>
                     </div>
-                    <div class="h-64"><canvas :id="'cv-' + c.id"></canvas></div>
-                </div>
-            </template>
+                </template>
 
-            <template x-if="!charts.length && !loading && sources.length">
-                <div class="col-span-full text-center text-sm py-20 rounded-xl"
-                     style="border:1px dashed var(--line);color:var(--ink-soft);">
-                    No charts yet. Click <b>+ New chart</b> to build one — series can even combine integrations.
+                {{-- METRICS in this group --}}
+                <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-4"
+                     :class="g.level ? 'pl-5' : ''" x-show="metricsIn(g.sectionId).length">
+                    <template x-for="m in metricsIn(g.sectionId)" :key="m.id">
+                        <div class="rounded-xl p-4 relative group"
+                             :style="m.accent ? 'background:var(--sidebar);border:1px solid var(--sidebar);' : 'background:var(--panel);border:1px solid var(--line);'">
+                            <div class="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-70 transition text-sm">
+                                <button @click="moveWidget('metric', m.id, -1)" :style="m.accent ? 'color:#fff;' : ''" title="Move earlier">‹</button>
+                                <button @click="moveWidget('metric', m.id, 1)" :style="m.accent ? 'color:#fff;' : ''" title="Move later">›</button>
+                                <button @click="openMetric(m.id)" :style="m.accent ? 'color:#fff;' : ''" title="Configure metric">⚙</button>
+                            </div>
+                            <div class="text-[11px] uppercase tracking-wide mb-2.5 pr-12"
+                                 :style="m.accent ? 'color:#8FAFA3;' : 'color:var(--ink-soft);'" x-text="m.title"></div>
+                            <div class="display text-[30px] font-bold leading-none"
+                                 :style="m.accent ? 'color:#fff;' : ''" x-text="m.display"></div>
+                            <div class="text-[11.5px] mt-2 font-semibold"
+                                 :style="m.error ? 'color:var(--coral);' : (m.accent ? 'color:var(--mint);' : 'color:var(--mint-deep);')"
+                                 x-text="m.error || m.subtitle || ''"></div>
+                        </div>
+                    </template>
                 </div>
-            </template>
-        </div>
+
+                {{-- CHARTS in this group --}}
+                <div class="chart-grid" :class="g.level ? 'pl-5' : ''" x-show="chartsIn(g.sectionId).length">
+                    <template x-for="c in chartsIn(g.sectionId)" :key="c.id">
+                        <div class="chart-card rounded-xl p-5 group" :data-w="c.width || 'full'"
+                             style="background:var(--panel);border:1px solid var(--line);">
+                            <div class="flex items-start justify-between mb-3">
+                                <div>
+                                    <h3 class="display text-[14.5px] font-semibold uppercase tracking-wide" x-text="c.title"></h3>
+                                    <p class="text-[11.5px] mt-0.5" style="color:var(--ink-soft);"
+                                       x-text="c.config.sheet + ' · grouped by ' + c.config.label_column"></p>
+                                </div>
+                                <div class="flex items-center gap-1 text-base leading-none opacity-40 group-hover:opacity-100 transition">
+                                    <button @click="moveWidget('chart', c.id, -1)" title="Move earlier">‹</button>
+                                    <button @click="moveWidget('chart', c.id, 1)" title="Move later">›</button>
+                                    <button @click="openBuilder(c.id)" title="Configure chart">⚙</button>
+                                </div>
+                            </div>
+                            <div :style="'height:' + (c.height ? c.height + 'px' : '16rem')"><canvas :id="'cv-' + c.id"></canvas></div>
+                        </div>
+                    </template>
+                </div>
+
+                {{-- Global empty state — only in the ungrouped bucket, only when nothing exists at all. --}}
+                <template x-if="g.type === 'ungrouped' && !metrics.length && !charts.length && !loading && sources.length">
+                    <div class="text-center text-sm py-16 rounded-xl"
+                         style="border:1px dashed var(--line);color:var(--ink-soft);">
+                        Nothing here yet. Add a <b>+ New metric</b> or <b>+ New chart</b>, and use
+                        <b>+ Add section</b> to group them (e.g. “General” / “SDR”).
+                    </div>
+                </template>
+            </div>
+        </template>
 
         {{-- ============================ TABLE ============================ --}}
         <template x-if="sources.length">
@@ -239,6 +288,39 @@
                            x-show="isCategoryChart(builder.type)" x-cloak>
                             Only this many categories are drawn (largest first). Raise it to show every status/stage.
                         </p>
+                    </div>
+
+                    {{-- Placement + size --}}
+                    <div class="col-span-2 grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold mb-1.5">Section</label>
+                            <select x-model="builder.section_id"
+                                    class="w-full rounded-lg text-sm px-3 py-2"
+                                    style="border:1px solid var(--line);background:var(--panel-alt);">
+                                <option value="">— none (ungrouped) —</option>
+                                <template x-for="opt in sectionSelectList()" :key="opt.id">
+                                    <option :value="opt.id" x-text="opt.label"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold mb-1.5">Width</label>
+                            <select x-model="builder.width"
+                                    class="w-full rounded-lg text-sm px-3 py-2"
+                                    style="border:1px solid var(--line);background:var(--panel-alt);">
+                                <option value="full">Full width</option>
+                                <option value="twothirds">Two-thirds</option>
+                                <option value="half">Half</option>
+                                <option value="third">Third</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold mb-1.5">Height (px)</label>
+                            <input type="number" min="160" max="900" step="20" x-model.number="builder.height"
+                                   placeholder="256"
+                                   class="w-full rounded-lg text-sm px-3 py-2"
+                                   style="border:1px solid var(--line);background:var(--panel-alt);">
+                        </div>
                     </div>
 
                     <div>
@@ -435,6 +517,16 @@
                         <input x-model="metric.subtitle" placeholder="won ÷ messaged"
                                class="w-full rounded-lg text-sm px-3 py-2" style="border:1px solid var(--line);background:var(--panel-alt);">
                     </div>
+                    <div class="col-span-2">
+                        <label class="block text-xs font-semibold mb-1.5">Section</label>
+                        <select x-model="metric.section_id"
+                                class="w-full rounded-lg text-sm px-3 py-2" style="border:1px solid var(--line);background:var(--panel-alt);">
+                            <option value="">— none (ungrouped) —</option>
+                            <template x-for="opt in sectionSelectList()" :key="opt.id">
+                                <option :value="opt.id" x-text="opt.label"></option>
+                            </template>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="flex gap-2 mb-5">
@@ -551,6 +643,7 @@
 
             charts: [],
             metrics: [],
+            sections: [],
             instances: {},
             loading: true,
 
@@ -559,8 +652,8 @@
             tableRows: [],
             tableQuery: '',
 
-            builder: { open: false, id: null, title: '', type: 'bar', key: '', label_column: '', limit: 10, series: [], filters: [], error: '', saving: false },
-            metric: { open: false, id: null, title: '', subtitle: '', mode: 'simple', format: 'number', decimals: 0, accent: false, simple: {}, varList: [], expression: '', preview: '—', previewError: '', previewing: false, error: '', saving: false },
+            builder: { open: false, id: null, title: '', type: 'bar', key: '', label_column: '', limit: 10, series: [], filters: [], section_id: '', width: 'full', height: null, error: '', saving: false },
+            metric: { open: false, id: null, title: '', subtitle: '', mode: 'simple', format: 'number', decimals: 0, accent: false, section_id: '', simple: {}, varList: [], expression: '', preview: '—', previewError: '', previewing: false, error: '', saving: false },
 
             // Pipeline/Stage cascading picker: distinct values are fetched once
             // per source (or per source+pipeline for stages) and cached here.
@@ -586,8 +679,141 @@
             async boot() {
                 if (!this.sources.length) { this.loading = false; return; }
                 this.tableKey = this.firstKey;
-                await Promise.all([this.loadCharts(), this.loadMetrics(), this.loadTable()]);
+                await Promise.all([this.loadSections(), this.loadCharts(), this.loadMetrics(), this.loadTable()]);
                 this.loading = false;
+            },
+
+            /* ---------- sections & layout ---------- */
+            async loadSections() {
+                const res = await fetch(this.cfg.sectionsIndex, { headers: { Accept: 'application/json' } });
+                this.sections = res.ok ? await res.json() : [];
+            },
+
+            topSections() {
+                return this.sections.filter(s => !s.parent_id).sort((a, b) => a.position - b.position);
+            },
+
+            subSections(parentId) {
+                return this.sections.filter(s => s.parent_id === parentId).sort((a, b) => a.position - b.position);
+            },
+
+            // The ordered list of render buckets: ungrouped first, then each top
+            // section immediately followed by its sub-sections.
+            orderedGroups() {
+                const groups = [{ type: 'ungrouped', sectionId: null, level: 0, key: 'ungrouped' }];
+                for (const top of this.topSections()) {
+                    groups.push({ type: 'section', section: top, sectionId: top.id, level: 0, key: 'sec-' + top.id });
+                    for (const sub of this.subSections(top.id)) {
+                        groups.push({ type: 'section', section: sub, sectionId: sub.id, level: 1, key: 'sec-' + sub.id });
+                    }
+                }
+                return groups;
+            },
+
+            metricsIn(sectionId) {
+                return this.metrics.filter(m => (m.section_id ?? null) === sectionId).sort((a, b) => a.position - b.position);
+            },
+
+            chartsIn(sectionId) {
+                return this.charts.filter(c => (c.section_id ?? null) === sectionId).sort((a, b) => a.position - b.position);
+            },
+
+            // Flat list for the builder <select>s: top sections, each followed by
+            // its sub-sections (prefixed) so nesting reads clearly.
+            sectionSelectList() {
+                const out = [];
+                for (const top of this.topSections()) {
+                    out.push({ id: top.id, label: top.title });
+                    for (const sub of this.subSections(top.id)) out.push({ id: sub.id, label: '— ' + sub.title });
+                }
+                return out;
+            },
+
+            async addSection(parentId = null) {
+                const title = prompt(parentId ? 'Name for the sub-section:' : 'Name for the section:');
+                if (!title) return;
+                const res = await fetch(this.cfg.sectionsStore, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': this.csrf },
+                    body: JSON.stringify({ title, parent_id: parentId }),
+                });
+                if (res.ok) this.sections = await res.json();
+            },
+
+            addSubSection(parentId) { return this.addSection(parentId); },
+
+            async renameSection(section) {
+                const title = prompt('Rename section:', section.title);
+                if (!title || title === section.title) return;
+                const res = await fetch(`/sections/${section.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': this.csrf },
+                    body: JSON.stringify({ title }),
+                });
+                if (res.ok) this.sections = await res.json();
+            },
+
+            async deleteSection(section) {
+                if (!confirm(`Delete section “${section.title}”? Its widgets move back to ungrouped.`)) return;
+                const res = await fetch(`/sections/${section.id}`, {
+                    method: 'DELETE',
+                    headers: { Accept: 'application/json', 'X-CSRF-TOKEN': this.csrf },
+                });
+                if (res.ok) {
+                    this.sections = await res.json();
+                    // Widgets were freed server-side — reload so their section_id updates.
+                    await Promise.all([this.loadMetrics(), this.loadCharts()]);
+                }
+            },
+
+            // Reorder a section among its siblings (top-level or within a parent).
+            moveSection(section, dir) {
+                const siblings = section.parent_id ? this.subSections(section.parent_id) : this.topSections();
+                const idx = siblings.findIndex(s => s.id === section.id);
+                const swap = idx + dir;
+                if (swap < 0 || swap >= siblings.length) return;
+                const tmp = siblings[idx].position;
+                siblings[idx].position = siblings[swap].position;
+                siblings[swap].position = tmp;
+                this.saveLayout();
+            },
+
+            // Reorder a widget within its current section by swapping positions.
+            moveWidget(kind, id, dir) {
+                const item = (kind === 'chart' ? this.charts : this.metrics).find(x => x.id === id);
+                if (!item) return;
+                const list = kind === 'chart' ? this.chartsIn(item.section_id ?? null) : this.metricsIn(item.section_id ?? null);
+                const idx = list.findIndex(x => x.id === id);
+                const swap = idx + dir;
+                if (swap < 0 || swap >= list.length) return;
+                const tmp = list[idx].position;
+                list[idx].position = list[swap].position;
+                list[swap].position = tmp;
+                this.recomputeGlobalPositions();
+                this.saveLayout();
+                if (kind === 'chart') this.$nextTick(() => this.charts.forEach(c => this.draw(c)));
+            },
+
+            // Normalise positions to 0..n across the whole dashboard, following
+            // the visual group order — keeps DB positions tidy and unambiguous.
+            recomputeGlobalPositions() {
+                let mi = 0, ci = 0;
+                for (const g of this.orderedGroups()) {
+                    this.metricsIn(g.sectionId).forEach(m => { m.position = mi++; });
+                    this.chartsIn(g.sectionId).forEach(c => { c.position = ci++; });
+                }
+            },
+
+            async saveLayout() {
+                await fetch(this.cfg.layoutSave, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': this.csrf },
+                    body: JSON.stringify({
+                        sections: this.sections.map(s => ({ id: s.id, parent_id: s.parent_id ?? null, position: s.position })),
+                        charts: this.charts.map(c => ({ id: c.id, section_id: c.section_id ?? null, position: c.position })),
+                        metrics: this.metrics.map(m => ({ id: m.id, section_id: m.section_id ?? null, position: m.position })),
+                    }),
+                });
             },
 
             blankSource() {
@@ -714,7 +940,7 @@
                     this.builder = {
                         open: true, id: null, title: '', type: 'bar', key: this.firstKey, label_column: '', limit: 10,
                         series: [{ key: this.firstKey, column: '', agg: 'count', label: 'Count' }],
-                        filters: [], error: '', saving: false,
+                        filters: [], section_id: '', width: 'full', height: null, error: '', saving: false,
                     };
                     return;
                 }
@@ -729,6 +955,7 @@
                         column: s.column || '', agg: s.agg || 'count', label: s.label || 'Count', color: s.color,
                     })),
                     filters: c.config.filters || [],
+                    section_id: c.section_id != null ? String(c.section_id) : '', width: c.width || 'full', height: c.height || null,
                     error: '', saving: false,
                 };
             },
@@ -743,10 +970,13 @@
                     title: this.builder.title,
                     type: this.builder.type,
                     integration_id: chart.integration_id,
+                    section_id: this.builder.section_id || null,
                     sheet: chart.dataset,
                     label_column: this.builder.label_column,
                     aggregate: this.builder.series[0]?.agg || 'count',
                     limit: this.builder.limit,
+                    width: this.builder.width || 'full',
+                    height: this.builder.height || null,
                     filters: this.builder.filters || [],
                     series: this.builder.series.map(s => {
                         const src = this.splitKey(s.key);
@@ -798,7 +1028,7 @@
                 if (!m || !m.config) {
                     this.metric = {
                         open: true, id: null, title: '', subtitle: '', mode: 'simple', format: 'number', decimals: 0, accent: false,
-                        simple: this.blankSource(), varList: [{ name: 'a', ...this.blankSource() }], expression: '',
+                        section_id: '', simple: this.blankSource(), varList: [{ name: 'a', ...this.blankSource() }], expression: '',
                         preview: '—', previewError: '', previewing: false, error: '', saving: false,
                     };
                     return;
@@ -815,6 +1045,7 @@
                 this.metric = {
                     open: true, id: m.id, title: cfg.title, subtitle: cfg.subtitle || '',
                     mode: cfg.mode, format: cfg.format, decimals: cfg.decimals, accent: Boolean(cfg.accent),
+                    section_id: (cfg.section_id ?? m.section_id) != null ? String(cfg.section_id ?? m.section_id) : '',
                     simple: { key: cfg.integration_id + '::' + (cfg.sheet || ''), agg: cfg.agg || 'count', column: cfg.column || '', filter_column: cfg.filter_column || '', filter_operator: cfg.filter_operator || 'eq', filter_value: cfg.filter_value || '', filters: cfg.filters || [] },
                     varList: varList.length ? varList : [{ name: 'a', ...this.blankSource() }],
                     expression: cfg.expression || '', preview: m.display, previewError: '', previewing: false, error: '', saving: false,
@@ -831,7 +1062,7 @@
 
             metricPayload() {
                 const m = this.metric;
-                const base = { title: m.title, subtitle: m.subtitle, mode: m.mode, format: m.format, decimals: m.decimals, accent: m.accent };
+                const base = { title: m.title, subtitle: m.subtitle, mode: m.mode, format: m.format, decimals: m.decimals, accent: m.accent, section_id: m.section_id || null };
 
                 if (m.mode === 'simple') {
                     const cfg = this.sourceConfig(m.simple);

@@ -4,10 +4,13 @@ namespace App\Dashboard\Controllers;
 
 use App\Dashboard\Models\Chart;
 use App\Dashboard\Models\Dashboard;
+use App\Dashboard\Models\Metric;
+use App\Dashboard\Models\Section;
 use App\Dashboard\Services\DashboardData;
 use App\Http\Controllers\Controller;
 use App\Integration\Services\RecordReader;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Renders and serves data for any dashboard. Dashboards read ONLY local synced
@@ -108,6 +111,76 @@ class DashboardController extends Controller
             ->values();
 
         return response()->json($values);
+    }
+
+    /**
+     * Persist the whole layout in one shot: section order/nesting and each
+     * widget's section + position. Only ids that actually belong to this
+     * dashboard are touched, so a stale or forged id is silently ignored.
+     */
+    public function reorderLayout(Request $request, Dashboard $dashboard)
+    {
+        $data = $request->validate([
+            'sections' => ['array'],
+            'sections.*.id' => ['required', 'integer'],
+            'sections.*.parent_id' => ['nullable', 'integer'],
+            'sections.*.position' => ['required', 'integer'],
+            'charts' => ['array'],
+            'charts.*.id' => ['required', 'integer'],
+            'charts.*.section_id' => ['nullable', 'integer'],
+            'charts.*.position' => ['required', 'integer'],
+            'metrics' => ['array'],
+            'metrics.*.id' => ['required', 'integer'],
+            'metrics.*.section_id' => ['nullable', 'integer'],
+            'metrics.*.position' => ['required', 'integer'],
+        ]);
+
+        // Ids we're allowed to touch — everything owned by this dashboard.
+        $sectionIds = $dashboard->sections()->pluck('id')->flip();
+        $chartIds = $dashboard->charts()->pluck('id')->flip();
+        $metricIds = $dashboard->metrics()->pluck('id')->flip();
+
+        // A widget may only be placed into a section of THIS dashboard (or null).
+        $validSection = fn ($id) => $id === null || isset($sectionIds[$id]);
+
+        DB::transaction(function () use ($data, $sectionIds, $chartIds, $metricIds, $validSection) {
+            foreach ($data['sections'] ?? [] as $s) {
+                if (! isset($sectionIds[$s['id']])) {
+                    continue;
+                }
+                $parent = $s['parent_id'] ?? null;
+                // Parent must be another section of this dashboard, not itself.
+                if ($parent !== null && ($parent === $s['id'] || ! isset($sectionIds[$parent]))) {
+                    $parent = null;
+                }
+                Section::where('id', $s['id'])->update([
+                    'parent_id' => $parent,
+                    'position' => $s['position'],
+                ]);
+            }
+
+            foreach ($data['charts'] ?? [] as $c) {
+                if (! isset($chartIds[$c['id']]) || ! $validSection($c['section_id'] ?? null)) {
+                    continue;
+                }
+                Chart::where('id', $c['id'])->update([
+                    'section_id' => $c['section_id'] ?? null,
+                    'position' => $c['position'],
+                ]);
+            }
+
+            foreach ($data['metrics'] ?? [] as $m) {
+                if (! isset($metricIds[$m['id']]) || ! $validSection($m['section_id'] ?? null)) {
+                    continue;
+                }
+                Metric::where('id', $m['id'])->update([
+                    'section_id' => $m['section_id'] ?? null,
+                    'position' => $m['position'],
+                ]);
+            }
+        });
+
+        return response()->noContent();
     }
 
     public function store(Request $request)

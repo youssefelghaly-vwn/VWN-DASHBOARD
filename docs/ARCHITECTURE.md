@@ -378,8 +378,9 @@ placeholders are resolved to numbers via `computeSimple()` before arithmetic.
 | `integration_records` | Synced rows (the read side's whole world). | `integration_id`, `dataset`, `external_id`, `payload` (JSON), `record_date` |
 | `sync_runs` | One sync attempt. | `status`, `records_synced`, `failed_records`, `last_error`, `meta` (per-dataset) |
 | `dashboards` | A dashboard. | `slug`, `name`, `is_default`, `position` |
-| `charts` | A chart widget. | `dashboard_id`, `type`, `sheet` (dataset), `label_column`, `series` (JSON), `filters` (JSON), `aggregate`, `limit` |
-| `metrics` | A KPI tile. | `mode`, `integration_id`, `sheet`, `agg`, `column`, `filters`, `expression`, `variables`, `format` |
+| `dashboard_sections` | A titled divider that groups + nests widgets (one level deep). | `dashboard_id`, `parent_id` (self-ref, null = top level), `title`, `position` |
+| `charts` | A chart widget. | `dashboard_id`, `section_id` (null = ungrouped), `type`, `sheet` (dataset), `label_column`, `series` (JSON), `filters` (JSON), `aggregate`, `limit`, `width` (full/twothirds/half/third), `height` (px), `position` |
+| `metrics` | A KPI tile. | `mode`, `integration_id`, `section_id`, `sheet`, `agg`, `column`, `filters`, `expression`, `variables`, `format`, `position` |
 | `menu_items` | Sidebar entries. | label, route/url, position |
 
 ---

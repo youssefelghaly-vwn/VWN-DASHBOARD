@@ -49,6 +49,11 @@ class Dashboard extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function sections(): HasMany
+    {
+        return $this->hasMany(Section::class)->orderBy('position');
+    }
+
     public function charts(): HasMany
     {
         return $this->hasMany(Chart::class)->orderBy('position');

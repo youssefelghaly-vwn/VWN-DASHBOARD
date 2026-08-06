@@ -64,6 +64,7 @@ class MetricController extends Controller
             'decimals' => ['required', 'integer', 'min:0', 'max:4'],
             'accent' => ['boolean'],
             'integration_id' => ['nullable', 'integer', 'exists:integrations,id'],
+            'section_id' => ['nullable', 'integer', 'exists:dashboard_sections,id'],
 
             'sheet' => ['required_if:mode,simple', 'nullable', 'string'],
             'agg' => ['required_if:mode,simple', 'nullable', 'in:'.implode(',', self::AGGS)],

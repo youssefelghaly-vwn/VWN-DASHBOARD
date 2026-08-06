@@ -3,6 +3,7 @@
 use App\Dashboard\Controllers\ChartController;
 use App\Dashboard\Controllers\DashboardController;
 use App\Dashboard\Controllers\MetricController;
+use App\Dashboard\Controllers\SectionController;
 use App\DataHealth\Controllers\DataHealthController;
 use App\Http\Controllers\ProfileController;
 use App\Integration\Controllers\IntegrationController;
@@ -22,6 +23,13 @@ Route::middleware(['auth', 'admin'])->name('admin.')->group(function () {
     Route::delete('/dashboards/{dashboard}', [DashboardController::class, 'destroy'])->name('dashboards.destroy');
     Route::get('/table/data', [DashboardController::class, 'tableData'])->name('table.data');
     Route::get('/table/distinct', [DashboardController::class, 'distinct'])->name('table.distinct');
+    Route::post('/dashboards/{dashboard}/layout', [DashboardController::class, 'reorderLayout'])->name('dashboards.layout');
+
+    // Dashboard sections — titled dividers that group + nest widgets.
+    Route::get('/dashboards/{dashboard:slug}/sections', [SectionController::class, 'index'])->name('dashboards.sections.index');
+    Route::post('/dashboards/{dashboard}/sections', [SectionController::class, 'store'])->name('sections.store');
+    Route::put('/sections/{section}', [SectionController::class, 'update'])->name('sections.update');
+    Route::delete('/sections/{section}', [SectionController::class, 'destroy'])->name('sections.destroy');
 
     // Chart widgets.
     Route::post('/dashboards/{dashboard}/charts', [ChartController::class, 'store'])->name('charts.store');
