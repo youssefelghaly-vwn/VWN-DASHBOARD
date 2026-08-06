@@ -2,6 +2,7 @@
 
 use App\Dashboard\Controllers\ChartController;
 use App\Dashboard\Controllers\DashboardController;
+use App\Dashboard\Controllers\LoopController;
 use App\Dashboard\Controllers\MetricController;
 use App\Dashboard\Controllers\SectionController;
 use App\DataHealth\Controllers\DataHealthController;
@@ -30,6 +31,12 @@ Route::middleware(['auth', 'admin'])->name('admin.')->group(function () {
     Route::post('/dashboards/{dashboard}/sections', [SectionController::class, 'store'])->name('sections.store');
     Route::put('/sections/{section}', [SectionController::class, 'update'])->name('sections.update');
     Route::delete('/sections/{section}', [SectionController::class, 'destroy'])->name('sections.destroy');
+
+    // Loop statistics — fan template widgets out across a column's distinct values.
+    Route::get('/dashboards/{dashboard:slug}/loops', [LoopController::class, 'index'])->name('dashboards.loops.index');
+    Route::post('/dashboards/{dashboard}/loops', [LoopController::class, 'store'])->name('loops.store');
+    Route::post('/loops/{loop}/refresh', [LoopController::class, 'refresh'])->name('loops.refresh');
+    Route::delete('/loops/{loop}', [LoopController::class, 'destroy'])->name('loops.destroy');
 
     // Chart widgets.
     Route::post('/dashboards/{dashboard}/charts', [ChartController::class, 'store'])->name('charts.store');

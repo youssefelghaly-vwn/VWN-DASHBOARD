@@ -379,8 +379,9 @@ placeholders are resolved to numbers via `computeSimple()` before arithmetic.
 | `sync_runs` | One sync attempt. | `status`, `records_synced`, `failed_records`, `last_error`, `meta` (per-dataset) |
 | `dashboards` | A dashboard. | `slug`, `name`, `is_default`, `position` |
 | `dashboard_sections` | A titled divider that groups + nests widgets (one level deep). | `dashboard_id`, `parent_id` (self-ref, null = top level), `title`, `position` |
-| `charts` | A chart widget. | `dashboard_id`, `section_id` (null = ungrouped), `type`, `sheet` (dataset), `label_column`, `series` (JSON), `filters` (JSON), `aggregate`, `limit`, `width` (full/twothirds/half/third), `height` (px), `position` |
-| `metrics` | A KPI tile. | `mode`, `integration_id`, `section_id`, `sheet`, `agg`, `column`, `filters`, `expression`, `variables`, `format`, `position` |
+| `charts` | A chart widget. | `dashboard_id`, `section_id` (null = ungrouped), `loop_id` (set if loop-generated), `type`, `sheet` (dataset), `label_column`, `series` (JSON), `filters` (JSON), `aggregate`, `limit`, `width` (full/twothirds/half/third), `height` (px), `position` |
+| `metrics` | A KPI tile. | `mode`, `integration_id`, `section_id`, `loop_id`, `sheet`, `agg`, `column`, `filters`, `expression`, `variables`, `format`, `position` |
+| `loop_statistics` | A generator that fans template widgets across a column's distinct values. | `dashboard_id`, `section_id` (the parent section it owns), `name`, `integration_id`, `dataset`, `column`, `value_operator`/`value_match` (optional value filter), `templates` (JSON: `{metrics, charts}`) |
 | `menu_items` | Sidebar entries. | label, route/url, position |
 
 ---

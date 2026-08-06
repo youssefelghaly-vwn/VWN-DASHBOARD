@@ -53,6 +53,8 @@
             'sectionsIndex' => route('admin.dashboards.sections.index', $dashboard->slug),
             'sectionsStore' => route('admin.sections.store', $dashboard->id),
             'layoutSave'   => route('admin.dashboards.layout', $dashboard->id),
+            'loopsIndex'   => route('admin.dashboards.loops.index', $dashboard->slug),
+            'loopsStore'   => route('admin.loops.store', $dashboard->id),
         ]))" x-init="boot()" class="px-6 lg:px-8 py-8">
 
         <div class="flex flex-wrap items-end justify-between gap-4 mb-7">
@@ -95,10 +97,27 @@
                 <button @click="addSection()" :disabled="!sources.length"
                         class="text-xs px-3 py-1.5 rounded-md font-medium disabled:opacity-40"
                         style="border:1px solid var(--line);background:var(--panel);">+ Add section</button>
+                <button @click="openLoop()" :disabled="!sources.length"
+                        class="text-xs px-3 py-1.5 rounded-md font-medium disabled:opacity-40"
+                        style="border:1px solid var(--line);background:var(--panel);">⟳ Loop statistics</button>
                 <button @click="openMetric()" :disabled="!sources.length"
                         class="text-xs px-3 py-1.5 rounded-md font-medium disabled:opacity-40"
                         style="border:1px solid var(--line);background:var(--panel);">+ New metric</button>
             </div>
+        </div>
+
+        {{-- Active loops — chips with refresh (re-expand for new values) + delete. --}}
+        <div x-show="loops.length" x-cloak class="flex flex-wrap items-center gap-2 mb-5">
+            <span class="text-[10px] uppercase tracking-wide" style="color:var(--ink-soft);">Loops:</span>
+            <template x-for="lp in loops" :key="lp.id">
+                <span class="inline-flex items-center gap-2 text-[11px] px-2.5 py-1 rounded-full"
+                      style="border:1px solid var(--line);background:var(--panel);">
+                    <span class="font-semibold" x-text="lp.name"></span>
+                    <span style="color:var(--ink-soft);" x-text="'· ' + lp.column + ' (' + lp.values + ')'"></span>
+                    <button @click="refreshLoop(lp)" title="Refresh — pick up new values" class="hover:opacity-100 opacity-60">⟳</button>
+                    <button @click="deleteLoop(lp)" title="Delete loop" class="hover:opacity-100 opacity-60" style="color:var(--coral);">✕</button>
+                </span>
+            </template>
         </div>
 
         {{-- One template renders every "group": the ungrouped bucket first, then
@@ -240,9 +259,9 @@
         <div x-show="builder.open" x-cloak
              class="fixed inset-0 flex items-center justify-center p-4 z-50"
              style="background:rgba(14,33,29,0.55);"
-             @click.self="builder.open = false" @keydown.escape.window="builder.open = false">
+             @click.self="closeBuilder()" @keydown.escape.window="builder.open && closeBuilder()">
             <div class="rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-auto" style="background:var(--panel);">
-                <h3 class="display text-lg font-bold mb-5" x-text="builder.id ? 'Configure chart' : 'New chart'"></h3>
+                <h3 class="display text-lg font-bold mb-5" x-text="builder.captureToLoop ? 'Loop chart template' : (builder.id ? 'Configure chart' : 'New chart')"></h3>
 
                 <div class="grid grid-cols-2 gap-4 mb-5">
                     <div class="col-span-2">
@@ -292,7 +311,7 @@
 
                     {{-- Placement + size --}}
                     <div class="col-span-2 grid grid-cols-3 gap-4">
-                        <div>
+                        <div x-show="!builder.captureToLoop">
                             <label class="block text-xs font-semibold mb-1.5">Section</label>
                             <select x-model="builder.section_id"
                                     class="w-full rounded-lg text-sm px-3 py-2"
@@ -488,10 +507,10 @@
                 <div class="flex items-center justify-between mt-6 gap-3">
                     <button x-show="builder.id" x-cloak @click="destroyChart()" class="text-xs font-semibold" style="color:var(--coral);">Delete chart</button>
                     <div class="flex gap-2 ml-auto">
-                        <button @click="builder.open = false" class="px-4 py-2 rounded-lg text-sm font-medium" style="border:1px solid var(--line);">Cancel</button>
+                        <button @click="closeBuilder()" class="px-4 py-2 rounded-lg text-sm font-medium" style="border:1px solid var(--line);">Cancel</button>
                         <button @click="saveChart()" :disabled="builder.saving"
                                 class="px-5 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50" style="background:var(--mint-deep);">
-                            <span x-text="builder.saving ? 'Saving…' : 'Save'"></span>
+                            <span x-text="builder.captureToLoop ? (builder.templateIndex === null ? 'Add to loop' : 'Update template') : (builder.saving ? 'Saving…' : 'Save')"></span>
                         </button>
                     </div>
                 </div>
@@ -502,9 +521,9 @@
         <div x-show="metric.open" x-cloak
              class="fixed inset-0 flex items-center justify-center p-4 z-50"
              style="background:rgba(14,33,29,0.55);"
-             @click.self="metric.open = false" @keydown.escape.window="metric.open = false">
+             @click.self="closeMetric()" @keydown.escape.window="metric.open && closeMetric()">
             <div class="rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-auto" style="background:var(--panel);">
-                <h3 class="display text-lg font-bold mb-5" x-text="metric.id ? 'Configure metric' : 'New metric'"></h3>
+                <h3 class="display text-lg font-bold mb-5" x-text="metric.captureToLoop ? 'Loop metric template' : (metric.id ? 'Configure metric' : 'New metric')"></h3>
 
                 <div class="grid grid-cols-2 gap-4 mb-5">
                     <div>
@@ -517,7 +536,7 @@
                         <input x-model="metric.subtitle" placeholder="won ÷ messaged"
                                class="w-full rounded-lg text-sm px-3 py-2" style="border:1px solid var(--line);background:var(--panel-alt);">
                     </div>
-                    <div class="col-span-2">
+                    <div class="col-span-2" x-show="!metric.captureToLoop">
                         <label class="block text-xs font-semibold mb-1.5">Section</label>
                         <select x-model="metric.section_id"
                                 class="w-full rounded-lg text-sm px-3 py-2" style="border:1px solid var(--line);background:var(--panel-alt);">
@@ -616,12 +635,123 @@
                 <div class="flex items-center justify-between mt-6 gap-3">
                     <button x-show="metric.id" x-cloak @click="destroyMetric()" class="text-xs font-semibold" style="color:var(--coral);">Delete metric</button>
                     <div class="flex gap-2 ml-auto">
-                        <button @click="metric.open = false" class="px-4 py-2 rounded-lg text-sm font-medium" style="border:1px solid var(--line);">Cancel</button>
+                        <button @click="closeMetric()" class="px-4 py-2 rounded-lg text-sm font-medium" style="border:1px solid var(--line);">Cancel</button>
                         <button @click="saveMetric()" :disabled="metric.saving"
                                 class="px-5 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50" style="background:var(--mint-deep);">
-                            <span x-text="metric.saving ? 'Saving…' : 'Save'"></span>
+                            <span x-text="metric.captureToLoop ? (metric.templateIndex === null ? 'Add to loop' : 'Update template') : (metric.saving ? 'Saving…' : 'Save')"></span>
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- ============================ LOOP BUILDER MODAL ============================ --}}
+        <div x-show="loop.open" x-cloak
+             class="fixed inset-0 flex items-center justify-center p-4 z-50"
+             style="background:rgba(14,33,29,0.55);"
+             @click.self="closeLoop()" @keydown.escape.window="loop.open && closeLoop()">
+            <div class="rounded-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-auto" style="background:var(--panel);">
+                <h3 class="display text-lg font-bold mb-1">Loop statistics</h3>
+                <p class="text-[12px] mb-5" style="color:var(--ink-soft);">
+                    Pick a column (e.g. <b>Owner</b>) and it repeats every template metric &amp; chart below
+                    for each distinct value — each in its own sub-section, scoped with
+                    <span class="mono">{column} = value</span>.
+                </p>
+
+                <div class="grid grid-cols-2 gap-4 mb-5">
+                    <div class="col-span-2">
+                        <label class="block text-xs font-semibold mb-1.5">Name (becomes the section title)</label>
+                        <input x-model="loop.name" placeholder="SDR Performance"
+                               class="w-full rounded-lg text-sm px-3 py-2" style="border:1px solid var(--line);background:var(--panel-alt);">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold mb-1.5">Loop over source</label>
+                        <select x-model="loop.key" @change="loop.column = ''"
+                                class="w-full rounded-lg text-sm px-3 py-2" style="border:1px solid var(--line);background:var(--panel-alt);">
+                            <template x-for="s in sources" :key="s.key">
+                                <option :value="s.key" x-text="s.label"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold mb-1.5">Loop over column</label>
+                        <select x-model="loop.column"
+                                class="w-full rounded-lg text-sm px-3 py-2" style="border:1px solid var(--line);background:var(--panel-alt);">
+                            <option value="">Select…</option>
+                            <template x-for="col in loopColumns()" :key="col">
+                                <option :value="col" x-text="col"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+
+                {{-- Optional: only loop over values matching a condition (e.g. Owner contains "SDR"). --}}
+                <div class="grid grid-cols-2 gap-4 mb-5 p-3 rounded-lg" style="background:var(--panel-alt);">
+                    <div>
+                        <label class="block text-[10px] mb-1" style="color:var(--ink-soft);">Only values where (optional)</label>
+                        <select x-model="loop.valueOp"
+                                class="w-full rounded text-xs px-2 py-1.5" style="border:1px solid var(--line);background:var(--panel);">
+                            <option value="">— all values —</option>
+                            <option value="contains">contains</option>
+                            <option value="eq">equals</option>
+                            <option value="neq">does not equal</option>
+                            <option value="not_contains">does not contain</option>
+                            <option value="has_any">has any of (comma-sep)</option>
+                            <option value="has_all">has all of (comma-sep)</option>
+                            <option value="not_has_any">has none of (comma-sep)</option>
+                        </select>
+                    </div>
+                    <div x-show="loop.valueOp" x-cloak>
+                        <label class="block text-[10px] mb-1" style="color:var(--ink-soft);">Value</label>
+                        <input x-model="loop.valueVal" placeholder="e.g. SDR"
+                               class="w-full rounded text-xs px-2 py-1.5" style="border:1px solid var(--line);background:var(--panel);">
+                    </div>
+                </div>
+
+                {{-- Template metrics --}}
+                <div class="mb-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[10.5px] font-bold uppercase tracking-[1.5px]" style="color:var(--ink-soft);">Metric templates</span>
+                        <button @click="addMetricTemplate()" class="text-xs px-3 py-1.5 rounded-md font-medium" style="border:1px solid var(--line);">+ Add metric template</button>
+                    </div>
+                    <template x-for="(t, i) in loop.metricTemplates" :key="i">
+                        <div class="flex items-center justify-between rounded-lg px-3 py-2 mb-1.5" style="background:var(--panel-alt);">
+                            <span class="text-xs font-medium" x-text="t.title || 'Metric'"></span>
+                            <div class="flex items-center gap-3 text-xs">
+                                <button @click="editMetricTemplate(i)" class="opacity-70 hover:opacity-100">Edit</button>
+                                <button @click="removeMetricTemplate(i)" style="color:var(--coral);">✕</button>
+                            </div>
+                        </div>
+                    </template>
+                    <p x-show="!loop.metricTemplates.length" class="text-[11px]" style="color:var(--ink-soft);">None yet.</p>
+                </div>
+
+                {{-- Template charts --}}
+                <div class="mb-5">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[10.5px] font-bold uppercase tracking-[1.5px]" style="color:var(--ink-soft);">Chart templates</span>
+                        <button @click="addChartTemplate()" class="text-xs px-3 py-1.5 rounded-md font-medium" style="border:1px solid var(--line);">+ Add chart template</button>
+                    </div>
+                    <template x-for="(t, i) in loop.chartTemplates" :key="i">
+                        <div class="flex items-center justify-between rounded-lg px-3 py-2 mb-1.5" style="background:var(--panel-alt);">
+                            <span class="text-xs font-medium" x-text="t.title || 'Chart'"></span>
+                            <div class="flex items-center gap-3 text-xs">
+                                <button @click="editChartTemplate(i)" class="opacity-70 hover:opacity-100">Edit</button>
+                                <button @click="removeChartTemplate(i)" style="color:var(--coral);">✕</button>
+                            </div>
+                        </div>
+                    </template>
+                    <p x-show="!loop.chartTemplates.length" class="text-[11px]" style="color:var(--ink-soft);">None yet.</p>
+                </div>
+
+                <p x-show="loop.error" x-cloak x-text="loop.error" class="text-xs mb-3" style="color:var(--coral);"></p>
+
+                <div class="flex items-center justify-end gap-2">
+                    <button @click="closeLoop()" class="px-4 py-2 rounded-lg text-sm font-medium" style="border:1px solid var(--line);">Cancel</button>
+                    <button @click="saveLoop()" :disabled="loop.saving"
+                            class="px-5 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50" style="background:var(--mint-deep);">
+                        <span x-text="loop.saving ? 'Building…' : 'Build loop'"></span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -644,6 +774,7 @@
             charts: [],
             metrics: [],
             sections: [],
+            loops: [],
             instances: {},
             loading: true,
 
@@ -653,7 +784,8 @@
             tableQuery: '',
 
             builder: { open: false, id: null, title: '', type: 'bar', key: '', label_column: '', limit: 10, series: [], filters: [], section_id: '', width: 'full', height: null, error: '', saving: false },
-            metric: { open: false, id: null, title: '', subtitle: '', mode: 'simple', format: 'number', decimals: 0, accent: false, section_id: '', simple: {}, varList: [], expression: '', preview: '—', previewError: '', previewing: false, error: '', saving: false },
+            metric: { open: false, id: null, title: '', subtitle: '', mode: 'simple', format: 'number', decimals: 0, accent: false, section_id: '', simple: {}, varList: [], expression: '', preview: '—', previewError: '', previewing: false, error: '', saving: false, captureToLoop: false, templateIndex: null },
+            loop: { open: false, name: '', key: '', column: '', valueOp: '', valueVal: '', metricTemplates: [], chartTemplates: [], error: '', saving: false },
 
             // Pipeline/Stage cascading picker: distinct values are fetched once
             // per source (or per source+pipeline for stages) and cached here.
@@ -679,9 +811,134 @@
             async boot() {
                 if (!this.sources.length) { this.loading = false; return; }
                 this.tableKey = this.firstKey;
-                await Promise.all([this.loadSections(), this.loadCharts(), this.loadMetrics(), this.loadTable()]);
+                await Promise.all([this.loadSections(), this.loadLoops(), this.loadCharts(), this.loadMetrics(), this.loadTable()]);
                 this.loading = false;
             },
+
+            /* ---------- loop statistics ---------- */
+            async loadLoops() {
+                const res = await fetch(this.cfg.loopsIndex, { headers: { Accept: 'application/json' } });
+                this.loops = res.ok ? await res.json() : [];
+            },
+
+            // The sub-set of sources that carry a Pipeline column? No — loops work
+            // over any dataset. Loop column options come from the chosen source.
+            openLoop() {
+                this.loop = {
+                    open: true, name: '', key: this.firstKey, column: '',
+                    valueOp: '', valueVal: '',
+                    metricTemplates: [], chartTemplates: [], error: '', saving: false,
+                };
+            },
+
+            closeLoop() { this.loop.open = false; },
+
+            clone(o) { return JSON.parse(JSON.stringify(o)); },
+
+            // --- template capture: reuse the metric/chart builders in a mode
+            //     where "Save" pushes the config into the loop instead of the DB.
+            addMetricTemplate() {
+                this.loop.open = false;
+                this.openMetric();
+                this.metric.captureToLoop = true;
+                this.metric.templateIndex = null;
+            },
+
+            editMetricTemplate(i) {
+                this.loop.open = false;
+                this.metric = { ...this.clone(this.loop.metricTemplates[i]), open: true, captureToLoop: true, templateIndex: i, preview: '—', previewError: '', previewing: false, error: '', saving: false };
+            },
+
+            captureMetricTemplate() {
+                const snap = this.clone(this.metric);
+                delete snap.open; delete snap.captureToLoop; delete snap.templateIndex; delete snap.previewing;
+                if (this.metric.templateIndex === null) this.loop.metricTemplates.push(snap);
+                else this.loop.metricTemplates[this.metric.templateIndex] = snap;
+                this.metric.open = false;
+                this.metric.captureToLoop = false;
+                this.loop.open = true;
+            },
+
+            addChartTemplate() {
+                this.loop.open = false;
+                this.openBuilder();
+                this.builder.captureToLoop = true;
+                this.builder.templateIndex = null;
+            },
+
+            editChartTemplate(i) {
+                this.loop.open = false;
+                this.builder = { ...this.clone(this.loop.chartTemplates[i]), open: true, captureToLoop: true, templateIndex: i, error: '', saving: false };
+            },
+
+            captureChartTemplate() {
+                const snap = this.clone(this.builder);
+                delete snap.open; delete snap.captureToLoop; delete snap.templateIndex;
+                if (this.builder.templateIndex === null || this.builder.templateIndex === undefined) this.loop.chartTemplates.push(snap);
+                else this.loop.chartTemplates[this.builder.templateIndex] = snap;
+                this.builder.open = false;
+                this.builder.captureToLoop = false;
+                this.loop.open = true;
+            },
+
+            removeMetricTemplate(i) { this.loop.metricTemplates.splice(i, 1); },
+            removeChartTemplate(i) { this.loop.chartTemplates.splice(i, 1); },
+
+            // Close handlers that return to the loop modal when we were capturing.
+            closeMetric() {
+                this.metric.open = false;
+                if (this.metric.captureToLoop) { this.metric.captureToLoop = false; this.loop.open = true; }
+            },
+            closeBuilder() {
+                this.builder.open = false;
+                if (this.builder.captureToLoop) { this.builder.captureToLoop = false; this.loop.open = true; }
+            },
+
+            async saveLoop() {
+                this.loop.error = '';
+                if (!this.loop.name.trim()) { this.loop.error = 'Give the loop a name.'; return; }
+                if (!this.loop.column) { this.loop.error = 'Pick a column to loop over.'; return; }
+                if (!this.loop.metricTemplates.length && !this.loop.chartTemplates.length) {
+                    this.loop.error = 'Add at least one metric or chart template.'; return;
+                }
+
+                this.loop.saving = true;
+                const src = this.splitKey(this.loop.key);
+                const payload = {
+                    name: this.loop.name,
+                    integration_id: src.integration_id,
+                    dataset: src.dataset,
+                    column: this.loop.column,
+                    value_operator: this.loop.valueOp || null,
+                    value_match: this.loop.valueVal || null,
+                    metrics: this.loop.metricTemplates.map(t => this.buildMetricPayload(t)),
+                    charts: this.loop.chartTemplates.map(t => this.buildChartPayload(t)),
+                };
+
+                const res = await fetch(this.cfg.loopsStore, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': this.csrf },
+                    body: JSON.stringify(payload),
+                });
+                this.loop.saving = false;
+                if (!res.ok) { const err = await res.json().catch(() => ({})); this.loop.error = err.message || 'Could not build the loop.'; return; }
+
+                this.loop.open = false;
+                await Promise.all([this.loadLoops(), this.loadSections(), this.loadMetrics(), this.loadCharts()]);
+            },
+
+            async refreshLoop(loop) {
+                await fetch(`/loops/${loop.id}/refresh`, { method: 'POST', headers: { Accept: 'application/json', 'X-CSRF-TOKEN': this.csrf } });
+                await Promise.all([this.loadLoops(), this.loadSections(), this.loadMetrics(), this.loadCharts()]);
+            },
+
+            async deleteLoop(loop) {
+                if (!confirm(`Delete loop “${loop.name}” and all the sections/widgets it generated?`)) return;
+                await fetch(`/loops/${loop.id}`, { method: 'DELETE', headers: { Accept: 'application/json', 'X-CSRF-TOKEN': this.csrf } });
+                await Promise.all([this.loadLoops(), this.loadSections(), this.loadMetrics(), this.loadCharts()]);
+            },
+
+            loopColumns() { return this.columnsFor(this.loop.key); },
 
             /* ---------- sections & layout ---------- */
             async loadSections() {
@@ -964,21 +1221,23 @@
                 this.builder.series.push({ key: this.builder.key, column: '', agg: 'count', label: 'Series ' + (this.builder.series.length + 1) });
             },
 
-            chartPayload() {
-                const chart = this.splitKey(this.builder.key);
+            chartPayload() { return this.buildChartPayload(this.builder); },
+
+            buildChartPayload(b) {
+                const chart = this.splitKey(b.key);
                 return {
-                    title: this.builder.title,
-                    type: this.builder.type,
+                    title: b.title,
+                    type: b.type,
                     integration_id: chart.integration_id,
-                    section_id: this.builder.section_id || null,
+                    section_id: b.section_id || null,
                     sheet: chart.dataset,
-                    label_column: this.builder.label_column,
-                    aggregate: this.builder.series[0]?.agg || 'count',
-                    limit: this.builder.limit,
-                    width: this.builder.width || 'full',
-                    height: this.builder.height || null,
-                    filters: this.builder.filters || [],
-                    series: this.builder.series.map(s => {
+                    label_column: b.label_column,
+                    aggregate: (b.series && b.series[0]?.agg) || 'count',
+                    limit: b.limit,
+                    width: b.width || 'full',
+                    height: b.height || null,
+                    filters: b.filters || [],
+                    series: (b.series || []).map(s => {
                         const src = this.splitKey(s.key);
                         return { integration_id: src.integration_id, sheet: src.dataset, column: s.column, agg: s.agg, label: s.label, color: s.color };
                     }),
@@ -989,6 +1248,9 @@
                 this.builder.error = '';
                 if (!this.builder.title.trim()) { this.builder.error = 'Title is required.'; return; }
                 if (!this.builder.label_column) { this.builder.error = 'Pick a group-by column.'; return; }
+
+                // Capture mode: this chart is a loop template, not a real chart.
+                if (this.builder.captureToLoop) { this.captureChartTemplate(); return; }
 
                 this.builder.saving = true;
                 const editing = Boolean(this.builder.id);
@@ -1060,8 +1322,9 @@
                 return { integration_id: src.integration_id, sheet: src.dataset, agg: o.agg, column: o.column, filter_column: o.filter_column, filter_operator: o.filter_operator, filter_value: o.filter_value, filters: o.filters || [] };
             },
 
-            metricPayload() {
-                const m = this.metric;
+            metricPayload() { return this.buildMetricPayload(this.metric); },
+
+            buildMetricPayload(m) {
                 const base = { title: m.title, subtitle: m.subtitle, mode: m.mode, format: m.format, decimals: m.decimals, accent: m.accent, section_id: m.section_id || null };
 
                 if (m.mode === 'simple') {
@@ -1071,7 +1334,7 @@
 
                 const variables = {};
                 let integration_id = null;
-                m.varList.forEach(v => {
+                (m.varList || []).forEach(v => {
                     if (!v.name) return;
                     const cfg = this.sourceConfig(v);
                     integration_id = integration_id ?? cfg.integration_id;
@@ -1100,6 +1363,9 @@
                 this.metric.error = '';
                 if (!this.metric.title.trim()) { this.metric.error = 'Title is required.'; return; }
                 if (this.metric.mode === 'formula' && !this.metric.expression.trim()) { this.metric.error = 'Enter a formula expression.'; return; }
+
+                // Capture mode: this metric is a loop template, not a real metric.
+                if (this.metric.captureToLoop) { this.captureMetricTemplate(); return; }
 
                 this.metric.saving = true;
                 const editing = Boolean(this.metric.id);
