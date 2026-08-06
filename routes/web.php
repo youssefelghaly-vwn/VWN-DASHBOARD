@@ -35,6 +35,7 @@ Route::middleware(['auth', 'admin'])->name('admin.')->group(function () {
     // Loop statistics — fan template widgets out across a column's distinct values.
     Route::get('/dashboards/{dashboard:slug}/loops', [LoopController::class, 'index'])->name('dashboards.loops.index');
     Route::post('/dashboards/{dashboard}/loops', [LoopController::class, 'store'])->name('loops.store');
+    Route::put('/loops/{loop}', [LoopController::class, 'update'])->name('loops.update');
     Route::post('/loops/{loop}/refresh', [LoopController::class, 'refresh'])->name('loops.refresh');
     Route::delete('/loops/{loop}', [LoopController::class, 'destroy'])->name('loops.destroy');
 
