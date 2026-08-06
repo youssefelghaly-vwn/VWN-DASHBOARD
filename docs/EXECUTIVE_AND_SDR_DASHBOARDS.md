@@ -275,6 +275,43 @@ Steps for a grouped, filtered chart (e.g. *Calls made per SDR*):
 
 ---
 
+## Loop statistics — build every SDR at once (recommended)
+
+Instead of rebuilding the same tiles per rep, a **Loop** defines the tiles once
+and repeats them for every distinct value of a column (e.g. every Owner). Each
+value gets its own sub-section, and every generated widget is auto-scoped with
+`{column} = value` — so you never type the owner name.
+
+**Steps**
+
+1. In the **Layout** toolbar click **⟳ Loop statistics**.
+2. **Name** it (this becomes the parent section title, e.g. `SDR Performance`).
+3. **Loop over source** = `… · Opportunities`, **Loop over column** = `Owner`.
+4. *(Optional)* **Only values where** — narrow which values loop, e.g.
+   `contains` `SDR`, or `equals` a specific name. Leave as “all values” for every owner.
+5. **+ Add metric template** — the normal metric builder opens. Build the tile
+   *without* the owner condition (the loop adds it). Example: `SMS Sent` →
+   `Count where` · `Outreach Stages` `has any of` `1st SMS`. Click **Add to loop**.
+   Repeat for each KPI (Calls Made, Conversations, Booking Rate %, …). Chart
+   templates work the same way via **+ Add chart template**.
+6. Click **Build loop**.
+
+The loop creates the `SDR Performance` section, a sub-section per owner
+(Kareem, Ahmed, …), and inside each a copy of every template scoped to that
+owner. Formula templates are scoped in **every** variable, so per-owner rates
+are correct.
+
+**Maintaining a loop** — a chip appears under the Layout toolbar for each loop:
+- **⟳ Refresh** re-expands it: new owners get their sub-section + tiles, removed
+  ones disappear. Run it after a sync adds people.
+- **✕ Delete** removes the loop and everything it generated.
+
+> The loop injects `{column} = value` on each widget, so a template should read
+> the **same dataset** as the loop column (e.g. loop Owner in Opportunities →
+> templates over Opportunities). Value matching is case-insensitive.
+
+---
+
 ## KPIs that need data we don’t sync yet
 
 These are **not present in GHL’s opportunity/contact data**, so they can’t be

@@ -54,6 +54,11 @@ class Dashboard extends Model
         return $this->hasMany(Section::class)->orderBy('position');
     }
 
+    public function loops(): HasMany
+    {
+        return $this->hasMany(LoopStatistic::class)->orderBy('position');
+    }
+
     public function charts(): HasMany
     {
         return $this->hasMany(Chart::class)->orderBy('position');
