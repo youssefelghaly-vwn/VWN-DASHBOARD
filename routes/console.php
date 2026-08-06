@@ -16,3 +16,6 @@ Schedule::command('queue:work --stop-when-empty --max-time=290 --tries=1 --sleep
     ->everyMinute()
     ->withoutOverlapping()
     ->runInBackground();
+
+
+    
