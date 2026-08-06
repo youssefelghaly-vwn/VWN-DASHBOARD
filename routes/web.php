@@ -26,6 +26,10 @@ Route::middleware(['auth', 'admin'])->name('admin.')->group(function () {
     Route::get('/table/distinct', [DashboardController::class, 'distinct'])->name('table.distinct');
     Route::post('/dashboards/{dashboard}/layout', [DashboardController::class, 'reorderLayout'])->name('dashboards.layout');
 
+    // Freshness — last sync across integrations (polled by the dashboard header) + sync-all.
+    Route::get('/sync-status', [DashboardController::class, 'syncStatus'])->name('sync.status');
+    Route::post('/sync-all', [DashboardController::class, 'syncAll'])->name('sync.all');
+
     // Dashboard sections — titled dividers that group + nest widgets.
     Route::get('/dashboards/{dashboard:slug}/sections', [SectionController::class, 'index'])->name('dashboards.sections.index');
     Route::post('/dashboards/{dashboard}/sections', [SectionController::class, 'store'])->name('sections.store');

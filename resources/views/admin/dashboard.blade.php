@@ -55,6 +55,9 @@
             'layoutSave'   => route('admin.dashboards.layout', $dashboard->id),
             'loopsIndex'   => route('admin.dashboards.loops.index', $dashboard->slug),
             'loopsStore'   => route('admin.loops.store', $dashboard->id),
+            'syncStatusUrl' => route('admin.sync.status'),
+            'syncAllUrl'   => route('admin.sync.all'),
+            'syncStatus'   => $syncStatus ?? ['at' => null, 'human' => null, 'connected' => 0, 'total' => 0],
         ]))" x-init="boot()" class="px-6 lg:px-8 py-8">
 
         <div class="flex flex-wrap items-end justify-between gap-4 mb-7">
@@ -63,6 +66,22 @@
                 <p class="text-sm" style="color:var(--ink-soft);">
                     Charts and metrics built from your synced integration data.
                 </p>
+                {{-- Freshness pill — auto-syncs every 5 minutes; label live-updates. --}}
+                <div class="flex items-center gap-2 mt-2 text-[11.5px]" style="color:var(--ink-soft);">
+                    <span class="inline-flex items-center gap-1.5">
+                        <span class="inline-block w-1.5 h-1.5 rounded-full" style="background:var(--mint-deep);"></span>
+                        Auto-syncs every 5 min
+                    </span>
+                    <span>·</span>
+                    <span :title="sync.at ? new Date(sync.at).toLocaleString() : ''">
+                        Last sync: <b x-text="sync.human || 'never'"></b>
+                    </span>
+                    <button @click="syncNow()" :disabled="sync.syncing"
+                            class="ml-1 px-2 py-0.5 rounded-md text-[11px] font-medium disabled:opacity-50"
+                            style="border:1px solid var(--line);background:var(--panel);">
+                        <span x-text="sync.syncing ? 'Syncing…' : '⟳ Sync now'"></span>
+                    </button>
+                </div>
             </div>
 
             <div class="flex gap-2">
@@ -777,6 +796,7 @@
             metrics: [],
             sections: [],
             loops: [],
+            sync: { at: cfg.syncStatus?.at ?? null, human: cfg.syncStatus?.human ?? null, connected: cfg.syncStatus?.connected ?? 0, total: cfg.syncStatus?.total ?? 0, syncing: false },
             instances: {},
             loading: true,
 
@@ -811,10 +831,45 @@
             },
 
             async boot() {
+                // Poll data freshness regardless of whether anything is synced yet,
+                // so the "Last sync" label updates (and data reloads) as syncs land.
+                setInterval(() => this.pollSyncStatus(), 60000);
+
                 if (!this.sources.length) { this.loading = false; return; }
                 this.tableKey = this.firstKey;
                 await Promise.all([this.loadSections(), this.loadLoops(), this.loadCharts(), this.loadMetrics(), this.loadTable()]);
                 this.loading = false;
+            },
+
+            /* ---------- data freshness / auto-sync ---------- */
+            async pollSyncStatus() {
+                try {
+                    const res = await fetch(this.cfg.syncStatusUrl, { headers: { Accept: 'application/json' } });
+                    if (!res.ok) return;
+                    const s = await res.json();
+                    const advanced = s.at && s.at !== this.sync.at;
+                    this.sync.at = s.at; this.sync.human = s.human;
+                    this.sync.connected = s.connected; this.sync.total = s.total;
+                    // A newer sync landed → pull the fresh numbers into the widgets.
+                    if (advanced && this.sources.length) {
+                        await Promise.all([this.loadMetrics(), this.loadCharts(), this.loadLoops()]);
+                    }
+                } catch (e) { /* transient — try again next tick */ }
+            },
+
+            async syncNow() {
+                this.sync.syncing = true;
+                try {
+                    const res = await fetch(this.cfg.syncAllUrl, {
+                        method: 'POST',
+                        headers: { Accept: 'application/json', 'X-CSRF-TOKEN': this.csrf },
+                    });
+                    if (res.ok) { const s = await res.json(); this.sync.at = s.at; this.sync.human = s.human; }
+                } catch (e) { /* ignore */ }
+                this.sync.syncing = false;
+                // Syncs run in the background; check back a couple of times to catch completion.
+                setTimeout(() => this.pollSyncStatus(), 8000);
+                setTimeout(() => this.pollSyncStatus(), 25000);
             },
 
             /* ---------- loop statistics ---------- */

@@ -6,6 +6,11 @@
             <p class="text-sm" style="color:var(--ink-soft);">
                 Sync status for every integration. This page is generic — every provider reports the same way.
             </p>
+            <div class="inline-flex items-center gap-1.5 mt-2 text-[11.5px] px-2.5 py-1 rounded-full"
+                 style="border:1px solid var(--line);background:var(--panel);color:var(--ink-soft);">
+                <span class="inline-block w-1.5 h-1.5 rounded-full" style="background:var(--mint-deep);"></span>
+                Auto-syncs every 5 minutes · each card's <b>Last Sync</b> shows when it last ran
+            </div>
         </div>
 
         @if (! count($report))
