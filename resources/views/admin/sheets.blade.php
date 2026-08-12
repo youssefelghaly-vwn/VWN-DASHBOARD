@@ -493,24 +493,24 @@
                 const payload = await res.json();
                 this.loading = false;
 
-                this.active = this.sheets.find(s => s.id === id);
-                this.data = { columns: payload.columns, rows: payload.rows, lookups: payload.lookups || [] };
+               this.active = this.sheets.find(s => s.id === id);
+                const asArray = (v) => Array.isArray(v) ? v : [];
+                this.data = { columns: payload.columns, rows: payload.rows, lookups: asArray(payload.lookups) };
                 this.columns = payload.columns;
 
                 const c = payload.config || {};
                 this.search = c.search || '';
-                this.conditions = c.conditions || [];
+                this.conditions = asArray(c.conditions);
                 this._match = c.match || 'all';
                 this.group = c.group || '';
                 this.totals = !!c.totals;
-                this.lookups = c.lookups || [];
-                this.charts = c.charts || [];
-                this.sort = c.sort || [];
-                this.hidden = c.hidden || [];
-                this.frozen = c.frozen || [];
-                this.order = c.order || [];
+                this.lookups = asArray(c.lookups);
+                this.charts = asArray(c.charts);
+                this.sort = asArray(c.sort);
+                this.hidden = asArray(c.hidden);
+                this.frozen = asArray(c.frozen);
+                this.order = asArray(c.order);
                 this.columnsMenuOpen = false;
-
                 await this.$nextTick();
                 this.rebuild();
             },
