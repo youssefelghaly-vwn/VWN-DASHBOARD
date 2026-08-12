@@ -86,6 +86,10 @@
     'loopRefreshTemplate' => route('admin.loops.refresh', ['loop' => '__ID__']),
     'metricUpdateTemplate' => route('admin.metrics.update', ['metric' => '__ID__']),
     'metricDestroyTemplate' => route('admin.metrics.destroy', ['metric' => '__ID__']),
+     'chartUpdateTemplate' => route('admin.charts.update', ['chart' => '__ID__']),
+    'chartDestroyTemplate' => route('admin.charts.destroy', ['chart' => '__ID__']),
+    'sectionUpdateTemplate' => route('admin.sections.update', ['section' => '__ID__']),
+    'sectionDestroyTemplate' => route('admin.sections.destroy', ['section' => '__ID__']),
 ]))" x-init="boot()" class="px-6 lg:px-8 py-8">
 
             <div class="flex flex-wrap items-end justify-between gap-4 mb-7">
