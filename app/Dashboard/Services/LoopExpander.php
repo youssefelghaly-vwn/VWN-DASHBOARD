@@ -13,12 +13,19 @@ use Illuminate\Support\Facades\DB;
 /**
  * Turns a LoopStatistic definition into real widgets: for every distinct value
  * of the loop column it creates a sub-section (named after the value) and a
- * copy of each template metric/chart, with a "{column} = value" condition
+ * copy of each template metric/chart, with a "{scope column} = value" condition
  * injected so the copy only reflects that value.
+ *
+ * The values and the scope can come from different columns. Looping over
+ * Users · Name lists every SDR on the roster; scoping by Owner is what the
+ * Opportunities-based templates filter on. Keeping them separate is what makes
+ * an SDR with no opportunities yet show up with zeros instead of not at all.
  *
  * Re-runnable: expanding again wipes the loop's previously generated
  * sub-sections + widgets and rebuilds them, so new values (e.g. a new SDR)
- * appear on refresh and removed ones disappear.
+ * appear and removed ones disappear. Because the rebuild is destructive,
+ * unattended callers should go through syncValues(), which only rebuilds when
+ * the value set actually changed.
  */
 class LoopExpander
 {
@@ -73,7 +80,33 @@ class LoopExpander
             }
         });
 
+        // Remember what we built so syncValues() can tell "nothing changed"
+        // from "a new SDR appeared" without rebuilding to find out.
+        $loop->update(['expanded_values' => $values]);
+
         return ['values' => $values, 'truncated' => $truncated, 'metrics' => $metricCount, 'charts' => $chartCount];
+    }
+
+    /**
+     * Re-expand only if the distinct value set has drifted from the one the last
+     * expansion materialised. Called after a sync, so a new SDR appears on the
+     * dashboard by itself — while an unchanged roster costs one read and leaves
+     * the existing widget rows (and their ids) alone.
+     */
+    public function syncValues(LoopStatistic $loop, int $userId): bool
+    {
+        $current = $this->distinctValues($loop);
+        $previous = $loop->expanded_values;
+
+        // Null means "never expanded, or pre-dates this column" — rebuild once
+        // to establish the baseline rather than assuming it matches.
+        if (is_array($previous) && array_slice($current, 0, self::MAX_VALUES) === $previous) {
+            return false;
+        }
+
+        $this->expand($loop, $userId);
+
+        return true;
     }
 
     /** Delete every section + widget a loop produced (used before deleting the loop itself). */
@@ -121,7 +154,7 @@ class LoopExpander
     /** Build a Metric row from a template, scoped to one loop value. */
     private function metricAttributes(array $tpl, LoopStatistic $loop, string $value, int $userId, int $sectionId, int $position): array
     {
-        $cond = ['column' => $loop->column, 'operator' => 'eq', 'value' => $value];
+        $cond = ['column' => $loop->filterColumn(), 'operator' => 'eq', 'value' => $value];
         $mode = $tpl['mode'] ?? 'simple';
 
         if ($mode === 'formula') {
@@ -161,7 +194,7 @@ class LoopExpander
     /** Build a Chart row from a template, scoped to one loop value. */
     private function chartAttributes(array $tpl, LoopStatistic $loop, string $value, int $userId, int $sectionId, int $position): array
     {
-        $cond = ['column' => $loop->column, 'operator' => 'eq', 'value' => $value];
+        $cond = ['column' => $loop->filterColumn(), 'operator' => 'eq', 'value' => $value];
 
         return [
             'dashboard_id' => $loop->dashboard_id,
@@ -173,7 +206,7 @@ class LoopExpander
             'type' => $tpl['type'] ?? 'bar',
             'integration_id' => $tpl['integration_id'] ?? $loop->integration_id,
             'sheet' => $tpl['sheet'] ?? $loop->dataset,
-            'label_column' => $tpl['label_column'] ?? $loop->column,
+            'label_column' => $tpl['label_column'] ?? $loop->filterColumn(),
             'aggregate' => $tpl['aggregate'] ?? 'count',
             'limit' => $tpl['limit'] ?? 10,
             'width' => $tpl['width'] ?? 'full',

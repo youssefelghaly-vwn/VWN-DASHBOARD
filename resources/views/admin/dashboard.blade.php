@@ -777,6 +777,10 @@
                         Pick a column (e.g. <b>Owner</b>) and it repeats every template metric &amp; chart below
                         for each distinct value — each in its own sub-section, scoped with
                         <span class="mono">{column} = value</span>.
+                        Values come from the source below; if your templates read a
+                        <i>different</i> dataset, set <b>Scope templates by</b> to the column they filter on
+                        (e.g. loop over <span class="mono">Users · Name</span>, scope by
+                        <span class="mono">Owner</span>) so people with no rows yet still get a sub-section.
                         <span x-show="loop.id" x-cloak>Saving re-applies the templates to <b>every</b> value.</span>
                     </p>
 
@@ -803,6 +807,22 @@
                                 style="border:1px solid var(--line);background:var(--panel-alt);">
                                 <option value="">Select…</option>
                                 <template x-for="col in loopColumns()" :key="col">
+                                    <option :value="col" x-text="col"></option>
+                                </template>
+                            </select>
+                        </div>
+                        {{-- The column the generated widgets filter on. Only differs from the
+                             loop column when the templates read another dataset. --}}
+                        <div class="col-span-2">
+                            <label class="block text-xs font-semibold mb-1.5">
+                                Scope templates by
+                                <span class="font-normal" style="color:var(--ink-soft);">(optional — defaults to the
+                                    loop column)</span>
+                            </label>
+                            <select x-model="loop.scopeColumn" class="w-full rounded-lg text-sm px-3 py-2"
+                                style="border:1px solid var(--line);background:var(--panel-alt);">
+                                <option value="">— same as the loop column —</option>
+                                <template x-for="col in scopeColumns()" :key="col">
                                     <option :value="col" x-text="col"></option>
                                 </template>
                             </select>
@@ -925,7 +945,7 @@ function dashboard(cfg) {
 
         builder: { open: false, id: null, title: '', type: 'bar', key: '', label_column: '', limit: 10, series: [], filters: [], section_id: '', width: 'full', height: null, error: '', saving: false },
         metric: { open: false, id: null, title: '', subtitle: '', mode: 'simple', format: 'number', decimals: 0, accent: false, section_id: '', simple: {}, varList: [], expression: '', preview: '—', previewError: '', previewing: false, error: '', saving: false, captureToLoop: false, templateIndex: null },
-        loop: { open: false, id: null, name: '', key: '', column: '', valueOp: '', valueVal: '', metricTemplates: [], chartTemplates: [], error: '', saving: false },
+        loop: { open: false, id: null, name: '', key: '', column: '', scopeColumn: '', valueOp: '', valueVal: '', metricTemplates: [], chartTemplates: [], error: '', saving: false },
 
         // Pipeline/Stage cascading picker: distinct values are fetched once
         // per source (or per source+pipeline for stages) and cached here.
@@ -1006,7 +1026,7 @@ function dashboard(cfg) {
 
         openLoop() {
             this.loop = {
-                open: true, id: null, name: '', key: this.firstKey, column: '',
+                open: true, id: null, name: '', key: this.firstKey, column: '', scopeColumn: '',
                 valueOp: '', valueVal: '',
                 metricTemplates: [], chartTemplates: [], error: '', saving: false,
             };
@@ -1016,7 +1036,7 @@ function dashboard(cfg) {
             this.loop = {
                 open: true, id: lp.id, name: lp.name,
                 key: (lp.integration_id ?? '') + '::' + (lp.dataset || ''),
-                column: lp.column,
+                column: lp.column, scopeColumn: lp.scope_column || '',
                 valueOp: lp.value_operator || '', valueVal: lp.value_match || '',
                 metricTemplates: (lp.templates?.metrics || []).map(p => this.metricEditorFromConfig(p)),
                 chartTemplates: (lp.templates?.charts || []).map(p => this.chartEditorFromConfig(p)),
@@ -1102,6 +1122,7 @@ function dashboard(cfg) {
                 integration_id: src.integration_id,
                 dataset: src.dataset,
                 column: this.loop.column,
+                scope_column: this.loop.scopeColumn || null,
                 value_operator: this.loop.valueOp || null,
                 value_match: this.loop.valueVal || null,
                 metrics: this.loop.metricTemplates.map(t => this.buildMetricPayload(t)),
@@ -1143,6 +1164,14 @@ function dashboard(cfg) {
         },
 
         loopColumns() { return this.columnsFor(this.loop.key); },
+
+        // Union of every source's columns: the scope column lives on whichever
+        // dataset the templates read, which needn't be the loop's own source.
+        scopeColumns() {
+            const all = new Set();
+            this.sources.forEach(s => (s.columns || []).forEach(c => all.add(c)));
+            return [...all].sort((a, b) => a.localeCompare(b));
+        },
 
         /* ---------- sections & layout ---------- */
         async loadSections() {
