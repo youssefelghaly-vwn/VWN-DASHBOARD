@@ -43,6 +43,7 @@ class LoopController extends Controller
             'integration_id' => $data['integration_id'] ?? null,
             'dataset' => $data['dataset'],
             'column' => $data['column'],
+            'scope_column' => $data['scope_column'] ?? null,
             'value_operator' => $data['value_operator'] ?? null,
             'value_match' => $data['value_match'] ?? null,
             // Pull the FULL template configs from raw input: $request->validate()
@@ -79,6 +80,7 @@ class LoopController extends Controller
             'integration_id' => $data['integration_id'] ?? null,
             'dataset' => $data['dataset'],
             'column' => $data['column'],
+            'scope_column' => $data['scope_column'] ?? null,
             'value_operator' => $data['value_operator'] ?? null,
             'value_match' => $data['value_match'] ?? null,
             'templates' => [
@@ -125,6 +127,7 @@ class LoopController extends Controller
                 'integration_id' => $l->integration_id,
                 'dataset' => $l->dataset,
                 'column' => $l->column,
+                'scope_column' => $l->scope_column,
                 'value_operator' => $l->value_operator,
                 'value_match' => $l->value_match,
                 'templates' => $l->templates ?? ['metrics' => [], 'charts' => []],
@@ -139,6 +142,10 @@ class LoopController extends Controller
             'integration_id' => ['nullable', 'integer', 'exists:integrations,id'],
             'dataset' => ['required', 'string'],
             'column' => ['required', 'string'],
+            // Optional: the column the generated widgets filter on, when it
+            // differs from the column the values come from (loop over
+            // Users · Name, scope Opportunities by Owner).
+            'scope_column' => ['nullable', 'string', 'max:190'],
             'value_operator' => ['nullable', 'in:'.implode(',', self::OPS)],
             'value_match' => ['nullable', 'string', 'max:255'],
             // Template widgets — free-form configs (same shape the metric/chart
