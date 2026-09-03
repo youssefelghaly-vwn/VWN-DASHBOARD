@@ -184,6 +184,18 @@ full GHL catalogue, synced independently of opportunity counts), not from the
 `Opportunities` rows — so empty pipelines still appear. See
 `pipelineOptions()` / `stageOptions()` in `admin/dashboard.blade.php`.
 
+**Pickers never drop a saved value.** `RecordReader@columns` only lists columns
+that appear in the rows synced *so far*, so a column a widget was saved with can
+be absent from the schema (a GHL custom field with no values yet, a sync where
+the custom-field fetch failed, a renamed sheet header) — and the async
+Pipeline/Stage lists are empty on first paint. A `<select>` whose value matches
+no `<option>` falls back to its first one, which made an edited metric read
+"— no filter —" while the number it displayed was still filtered. Every
+data-driven picker therefore builds its options through `optionsWith()` /
+`columnOptions()` (`admin/dashboard.blade.php`, `admin/sheets.blade.php`), which
+appends the saved value when the list lacks it; `columnMissing()` flags such a
+column in the editor so it is obvious the column is not in the current data.
+
 ### 5. Metrics (KPI tiles)
 
 **`GET /dashboards/{slug}/metrics`** · `MetricController@index` →

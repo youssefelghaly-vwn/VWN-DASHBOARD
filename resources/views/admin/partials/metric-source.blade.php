@@ -42,14 +42,20 @@
                 class="w-full rounded text-xs px-2 py-1.5"
                 style="border:1px solid var(--line);background:var(--panel);">
             <option value="">Select…</option>
-            <template x-for="col in columnsFor({{ $bind }}.key)" :key="col">
+            <template x-for="col in columnOptions({{ $bind }}.key, {{ $bind }}.column)" :key="col">
                 <option :value="col" x-text="col"></option>
             </template>
         </select>
+        <p class="mt-1 text-[10px] leading-tight" style="color:var(--coral);"
+           x-show="columnMissing({{ $bind }}.key, {{ $bind }}.column)" x-cloak>
+            Not in this source's synced columns right now — kept as saved.
+        </p>
     </div>
 
-    {{-- PIPELINE / STAGE — cascading picker, only shown when the source has these columns --}}
-    <template x-if="columnsFor({{ $bind }}.key).includes('Pipeline')">
+    {{-- PIPELINE / STAGE — cascading picker, only shown when the source has these
+         columns (or when a saved metric already scopes to a pipeline, so the
+         scope stays visible even if 'Pipeline' is missing from the schema). --}}
+    <template x-if="columnsFor({{ $bind }}.key).includes('Pipeline') || filterVal({{ $bind }}.filters, 'Pipeline')">
         <div class="col-span-12 grid grid-cols-12 gap-2">
             <div class="col-span-6">
                 <label class="block text-[10px] mb-1" style="color:var(--ink-soft);">Pipeline</label>
@@ -60,7 +66,7 @@
                         class="w-full rounded text-xs px-2 py-1.5"
                         style="border:1px solid var(--line);background:var(--panel);">
                     <option value="">— all pipelines —</option>
-                    <template x-for="p in pipelineOptions({{ $bind }}.key)" :key="p">
+                    <template x-for="p in optionsWith(pipelineOptions({{ $bind }}.key), filterVal({{ $bind }}.filters, 'Pipeline'))" :key="p">
                         <option :value="p" x-text="p"></option>
                     </template>
                 </select>
@@ -72,7 +78,7 @@
                         class="w-full rounded text-xs px-2 py-1.5"
                         style="border:1px solid var(--line);background:var(--panel);">
                     <option value="">— all stages —</option>
-                    <template x-for="st in stageOptions({{ $bind }})" :key="st">
+                    <template x-for="st in optionsWith(stageOptions({{ $bind }}), filterVal({{ $bind }}.filters, 'Stage'))" :key="st">
                         <option :value="st" x-text="st"></option>
                     </template>
                 </select>
@@ -87,10 +93,14 @@
                 class="w-full rounded text-xs px-2 py-1.5"
                 style="border:1px solid var(--line);background:var(--panel);">
             <option value="">— no filter —</option>
-            <template x-for="col in columnsFor({{ $bind }}.key)" :key="col">
+            <template x-for="col in columnOptions({{ $bind }}.key, {{ $bind }}.filter_column)" :key="col">
                 <option :value="col" x-text="col"></option>
             </template>
         </select>
+        <p class="mt-1 text-[10px] leading-tight" style="color:var(--coral);"
+           x-show="columnMissing({{ $bind }}.key, {{ $bind }}.filter_column)" x-cloak>
+            Not in this source's synced columns right now — kept as saved.
+        </p>
     </div>
 
     <div class="col-span-4" x-show="{{ $bind }}.filter_column" x-cloak>
@@ -148,7 +158,7 @@
                     <select x-model="cond.column" class="w-full rounded text-xs px-2 py-1.5"
                             style="border:1px solid var(--line);background:var(--panel);">
                         <option value="">— column —</option>
-                        <template x-for="col in columnsFor({{ $bind }}.key)" :key="col">
+                        <template x-for="col in columnOptions({{ $bind }}.key, cond.column)" :key="col">
                             <option :value="col" x-text="col"></option>
                         </template>
                     </select>

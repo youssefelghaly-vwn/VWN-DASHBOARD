@@ -159,7 +159,7 @@
                 <select x-model="group" @change="applyView(); persist()"
                         class="rounded-lg text-sm px-3 py-2" style="border:1px solid var(--line);background:var(--panel-alt);">
                     <option value="">No grouping</option>
-                    <template x-for="c in columns" :key="'g'+c"><option :value="c" x-text="'Group by: ' + c"></option></template>
+                    <template x-for="c in optionsWith(columns, group)" :key="'g'+c"><option :value="c" x-text="'Group by: ' + c"></option></template>
                 </select>
 
                 <label class="flex items-center gap-1.5 text-sm px-3 py-2 rounded-lg"
@@ -287,7 +287,7 @@
                         <div class="grid grid-cols-12 gap-2 items-center">
                             <select x-model="c.column" class="col-span-4 rounded-lg text-sm px-2 py-1.5" style="border:1px solid var(--line);background:var(--panel-alt);">
                                 <option value="">Column…</option>
-                                <template x-for="col in columns" :key="'fc'+col"><option :value="col" x-text="col"></option></template>
+                                <template x-for="col in optionsWith(columns, c.column)" :key="'fc'+col"><option :value="col" x-text="col"></option></template>
                             </select>
                             <select x-model="c.operator" class="col-span-3 rounded-lg text-sm px-2 py-1.5" style="border:1px solid var(--line);background:var(--panel-alt);">
                                 <template x-for="op in operators" :key="op.v"><option :value="op.v" x-text="op.t"></option></template>
@@ -471,6 +471,18 @@
             },
             columnsFor(key) {
                 return this.sources.find(s => s.key === key)?.columns || [];
+            },
+
+            // Options for a data-driven <select>, with the saved value always
+            // in the list. A column the view was saved with can drop out (the
+            // integration synced no values for it, a header was renamed), and
+            // without it here the browser falls back to the first option — the
+            // picker would read "No grouping" while the view is still grouped.
+            optionsWith(options, ...saved) {
+                const list = options || [];
+                const extra = saved.filter(v => v !== '' && v != null && !list.includes(v));
+
+                return extra.length ? [...list, ...extra] : list;
             },
 
             get sourceLabel() {

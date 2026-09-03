@@ -437,15 +437,19 @@
                             <select x-model="builder.label_column" class="w-full rounded-lg text-sm px-3 py-2"
                                 style="border:1px solid var(--line);background:var(--panel-alt);">
                                 <option value="">Select…</option>
-                                <template x-for="col in columnsFor(builder.key)" :key="col">
+                                <template x-for="col in columnOptions(builder.key, builder.label_column)" :key="col">
                                     <option :value="col" x-text="col"></option>
                                 </template>
                             </select>
+                            <p class="mt-1 text-[11px]" style="color:var(--coral);"
+                                x-show="columnMissing(builder.key, builder.label_column)" x-cloak>
+                                Not in this source's synced columns right now — kept as saved.
+                            </p>
                         </div>
 
                         {{-- Pipeline → Stage cascading picker — scopes the whole chart to one
                          pipeline (and optionally one kanban stage) when the source has them. --}}
-                        <template x-if="columnsFor(builder.key).includes('Pipeline')">
+                        <template x-if="columnsFor(builder.key).includes('Pipeline') || filterVal(builder.filters, 'Pipeline')">
                             <div class="col-span-2 grid grid-cols-2 gap-4 p-3 rounded-lg"
                                 style="background:var(--panel-alt);">
                                 <div>
@@ -456,7 +460,7 @@
                                         class="w-full rounded-lg text-sm px-3 py-2"
                                         style="border:1px solid var(--line);background:var(--panel);">
                                         <option value="">— all pipelines —</option>
-                                        <template x-for="p in pipelineOptions(builder.key)" :key="p">
+                                        <template x-for="p in optionsWith(pipelineOptions(builder.key), filterVal(builder.filters, 'Pipeline'))" :key="p">
                                             <option :value="p" x-text="p"></option>
                                         </template>
                                     </select>
@@ -469,7 +473,7 @@
                                         class="w-full rounded-lg text-sm px-3 py-2"
                                         style="border:1px solid var(--line);background:var(--panel);">
                                         <option value="">— all stages —</option>
-                                        <template x-for="st in stageOptions(builder)" :key="st">
+                                        <template x-for="st in optionsWith(stageOptions(builder), filterVal(builder.filters, 'Stage'))" :key="st">
                                             <option :value="st" x-text="st"></option>
                                         </template>
                                     </select>
@@ -498,7 +502,7 @@
                                     <select x-model="cond.column" class="col-span-4 rounded text-xs px-2 py-1.5"
                                         style="border:1px solid var(--line);background:var(--panel);">
                                         <option value="">— column —</option>
-                                        <template x-for="col in columnsFor(builder.key)" :key="col">
+                                        <template x-for="col in columnOptions(builder.key, cond.column)" :key="col">
                                             <option :value="col" x-text="col"></option>
                                         </template>
                                     </select>
@@ -560,7 +564,7 @@
                                     <select x-model="s.column" class="w-full rounded text-xs px-2 py-1.5"
                                         style="border:1px solid var(--line);background:var(--panel);">
                                         <option value="">— row count —</option>
-                                        <template x-for="col in columnsFor(s.key)" :key="col">
+                                        <template x-for="col in columnOptions(s.key, s.column)" :key="col">
                                             <option :value="col" x-text="col"></option>
                                         </template>
                                     </select>
@@ -806,7 +810,7 @@
                             <select x-model="loop.column" class="w-full rounded-lg text-sm px-3 py-2"
                                 style="border:1px solid var(--line);background:var(--panel-alt);">
                                 <option value="">Select…</option>
-                                <template x-for="col in loopColumns()" :key="col">
+                                <template x-for="col in optionsWith(loopColumns(), loop.column)" :key="col">
                                     <option :value="col" x-text="col"></option>
                                 </template>
                             </select>
@@ -822,7 +826,7 @@
                             <select x-model="loop.scopeColumn" class="w-full rounded-lg text-sm px-3 py-2"
                                 style="border:1px solid var(--line);background:var(--panel-alt);">
                                 <option value="">— same as the loop column —</option>
-                                <template x-for="col in scopeColumns()" :key="col">
+                                <template x-for="col in optionsWith(scopeColumns(), loop.scopeColumn)" :key="col">
                                     <option :value="col" x-text="col"></option>
                                 </template>
                             </select>
@@ -956,6 +960,29 @@ function dashboard(cfg) {
         get firstKey() { return this.sources[0]?.key || ''; },
 
         columnsFor(key) { return this.sources.find(s => s.key === key)?.columns || []; },
+
+        // Options for a data-driven <select>, with the value a widget was saved
+        // with guaranteed to be in the list. Without this the browser silently
+        // falls back to the first option (e.g. "— no filter —") whenever the
+        // saved value is missing from the list, so an edited metric looked
+        // unfiltered while the number it shows was still filtered. A value can
+        // legitimately be missing: the schema only lists columns present in the
+        // rows synced so far (a GHL custom field with no values yet, a failed
+        // custom-field fetch, a renamed sheet header), and async option lists
+        // (Pipeline/Stage) are empty on first paint.
+        optionsWith(options, ...saved) {
+            const list = options || [];
+            const extra = saved.filter(v => v !== '' && v != null && !list.includes(v));
+
+            return extra.length ? [...list, ...extra] : list;
+        },
+
+        // columnsFor() plus any saved value(s) that dropped out of the schema.
+        columnOptions(key, ...saved) { return this.optionsWith(this.columnsFor(key), ...saved); },
+
+        // True when a saved column is no longer among the source's synced
+        // columns — the editor keeps showing it, flagged, instead of losing it.
+        columnMissing(key, column) { return Boolean(column) && !this.columnsFor(key).includes(column); },
 
         splitKey(key) {
             const [integration_id, ...rest] = String(key).split('::');
