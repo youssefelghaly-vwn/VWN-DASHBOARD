@@ -8,6 +8,7 @@ use App\Dashboard\Controllers\SectionController;
 use App\DataHealth\Controllers\DataHealthController;
 use App\Http\Controllers\ProfileController;
 use App\Integration\Controllers\IntegrationController;
+use App\Integration\Controllers\OpportunityFieldController;
 use App\Menu\Controllers\MenuController;
 use App\Sheet\Controllers\SheetController;
 use App\Team\Controllers\InvitationController;
@@ -60,6 +61,9 @@ Route::middleware(['auth', 'admin'])->name('admin.')->group(function () {
     Route::put('/integrations/{integration}', [IntegrationController::class, 'update'])->name('integrations.update');
     Route::post('/integrations/{integration}/sync', [IntegrationController::class, 'sync'])->name('integrations.sync');
     Route::delete('/integrations/{integration}', [IntegrationController::class, 'destroy'])->name('integrations.destroy');
+    // Which GoHighLevel opportunity fields become columns — its own action so an
+    // empty selection saves as empty instead of being merged away by update().
+    Route::put('/integrations/{integration}/opportunity-fields', [OpportunityFieldController::class, 'update'])->name('integrations.opportunity-fields');
 
     // Sheets — read-only, Excel-style workspace over synced datasets.
     Route::get('/sheets', [SheetController::class, 'index'])->name('sheets.index');
