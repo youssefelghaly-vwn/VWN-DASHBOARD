@@ -136,7 +136,7 @@ trait FiltersRows
      *
      * @return array{0: ?CarbonImmutable, 1: ?CarbonImmutable}
      */
-    private function dateWindow(string $operator, string $value): array
+    protected function dateWindow(string $operator, string $value): array
     {
         $today = CarbonImmutable::today();
         $n = $this->dayCount($value);
@@ -186,7 +186,7 @@ trait FiltersRows
      * GHL sends ISO strings ("2026-09-09", "2026-08-24T18:25:36.233Z") or epoch
      * milliseconds, and CastsValues::date() normalizes to "Y-m-d".
      */
-    private function cellDate(mixed $v): ?CarbonImmutable
+    protected function cellDate(mixed $v): ?CarbonImmutable
     {
         $s = trim((string) $v);
 
@@ -194,9 +194,13 @@ trait FiltersRows
             return null;
         }
 
-        // Epoch milliseconds, as GHL hands out on some fields.
-        if (strlen($s) === 13 && ctype_digit($s)) {
-            return CarbonImmutable::createFromTimestampMs((int) $s, config('app.timezone'))->startOfDay();
+        // Epoch milliseconds (13 digits) or seconds (10), as GHL hands out on
+        // some fields. Narrow digit counts on purpose: a bare integer column
+        // should not start reading as a date.
+        if (ctype_digit($s) && (strlen($s) === 13 || strlen($s) === 10)) {
+            $ms = strlen($s) === 13 ? (int) $s : (int) $s * 1000;
+
+            return CarbonImmutable::createFromTimestampMs($ms, config('app.timezone'))->startOfDay();
         }
 
         if (preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ]|$)/', $s, $m)) {
@@ -208,7 +212,33 @@ trait FiltersRows
             return $this->calendarDay((int) $m[3], (int) $m[1], (int) $m[2]);
         }
 
+        // "Sep 9, 2026" and "9 Sep 2026" — how a CRM's own UI writes a date, and
+        // what lands in the cell if a field ever syncs as its display string.
+        // A month NAME plus a day plus a four-digit year is unambiguous; the
+        // bare "May" or "1st Email" that Carbon::parse would happily read as a
+        // date matches neither pattern.
+        if (preg_match('/^([a-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/i', $s, $m)) {
+            $month = $this->monthNumber($m[1]);
+
+            return $month ? $this->calendarDay((int) $m[3], $month, (int) $m[2]) : null;
+        }
+
+        if (preg_match('/^(\d{1,2})(?:st|nd|rd|th)?\.?\s+([a-z]{3,9})\.?,?\s+(\d{4})$/i', $s, $m)) {
+            $month = $this->monthNumber($m[2]);
+
+            return $month ? $this->calendarDay((int) $m[3], $month, (int) $m[1]) : null;
+        }
+
         return null;
+    }
+
+    /** 1-12 for an English month name or its three-letter prefix, else null. */
+    private function monthNumber(string $name): ?int
+    {
+        $months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        $index = array_search(mb_strtolower(substr($name, 0, 3)), $months, true);
+
+        return $index === false ? null : $index + 1;
     }
 
     /** Rejects a well-shaped but impossible date (2026-02-31) instead of rolling it over. */

@@ -559,9 +559,7 @@ class GoHighLevelProvider implements IntegrationProvider
         if (str_starts_with($key, 'cf:')) {
             $cf = $customById[substr($key, 3)] ?? null;
 
-            return $cf === null
-                ? null
-                : $this->str($cf['fieldValueArray'] ?? $cf['fieldValueString'] ?? $cf['fieldValue'] ?? $cf['value'] ?? '');
+            return $cf === null ? null : $this->str($this->customFieldValue($cf));
         }
 
         $path = substr($key, strlen('native:'));
@@ -650,6 +648,34 @@ class GoHighLevelProvider implements IntegrationProvider
     }
 
     /**
+     * The value of one `customFields` entry, whatever key GHL parked it under.
+     *
+     * The v2 API names that key after the field's TYPE — fieldValueString,
+     * fieldValueArray, and for a date field fieldValueDate — while the
+     * single-opportunity endpoint just says fieldValue. Listing the ones we
+     * have seen and stopping there means an unlisted type reads as empty,
+     * which looks exactly like "nobody filled this in": a date column would
+     * exist, show blank, and quietly match no date filter. So the known keys
+     * are tried in order and anything else fieldValue* is still accepted.
+     */
+    private function customFieldValue(array $cf): mixed
+    {
+        foreach (['fieldValueArray', 'fieldValueString', 'fieldValue', 'value'] as $key) {
+            if (isset($cf[$key])) {
+                return $cf[$key];
+            }
+        }
+
+        foreach ($cf as $key => $value) {
+            if (str_starts_with($key, 'fieldValue')) {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
+    /**
      * Flatten an opportunity's `customFields` into named columns, resolving each
      * opaque field id to its label via $cfMap. Single-value fields land as
      * strings; multi-select array fields (e.g. "Outreach Stages" →
@@ -670,13 +696,7 @@ class GoHighLevelProvider implements IntegrationProvider
                 continue;
             }
 
-            $value = $cf['fieldValueArray']
-                ?? $cf['fieldValueString']
-                ?? $cf['fieldValue']
-                ?? $cf['value']
-                ?? '';
-
-            $out[$this->str($name)] = $this->str($value);
+            $out[$this->str($name)] = $this->str($this->customFieldValue($cf));
         }
 
         return $out;
@@ -749,7 +769,7 @@ class GoHighLevelProvider implements IntegrationProvider
                 continue;
             }
 
-            $base[$this->str($name)] = $this->str($cf['value'] ?? '');
+            $base[$this->str($name)] = $this->str($this->customFieldValue($cf));
         }
 
         return $base;

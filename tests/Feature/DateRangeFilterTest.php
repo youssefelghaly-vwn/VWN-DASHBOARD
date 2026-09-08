@@ -182,6 +182,48 @@ class DateRangeFilterTest extends TestCase
     }
 
     /**
+     * Every shape a date can reach a cell in. A shape the parser does not know
+     * is the worst kind of bug here: the column exists, shows a date, and the
+     * filter silently reports zero.
+     */
+    public function test_every_supported_date_shape_reads_as_the_same_day(): void
+    {
+        $integration = $this->integration();
+
+        $this->rowsWithFollowUp($integration, [
+            '2026-09-16',
+            '2026-09-16T18:25:36.233Z',
+            '2026-9-16',
+            '09/16/2026',
+            (string) Carbon::parse('2026-09-16 12:00:00')->getTimestampMs(),   // epoch ms
+            (string) Carbon::parse('2026-09-16 12:00:00')->getTimestamp(),     // epoch seconds
+            'Sep 16, 2026',
+            'September 16, 2026',
+            '16 Sep 2026',
+            '16th September 2026',
+        ]);
+
+        $this->assertSame(10.0, $this->countWhere($integration, 'date_today'));
+    }
+
+    /** The month-name patterns must not turn ordinary text into a date. */
+    public function test_month_name_parsing_does_not_swallow_ordinary_text(): void
+    {
+        $integration = $this->integration();
+
+        $this->rowsWithFollowUp($integration, [
+            '1st Email',
+            '1st Email, 1st Linked-IN',
+            'May',
+            'March Madness',
+            'Sept', // a month with no day and no year is not a date
+            '2026-09-16',
+        ]);
+
+        $this->assertSame(1.0, $this->countWhere($integration, 'date_this_month'));
+    }
+
+    /**
      * A half-configured filter must not read as "no filter" — that would show a
      * confident full count. gt/lt already exclude everything on an unparseable
      * needle; date operators match that.

@@ -7,8 +7,10 @@ use App\Integration\Models\Integration;
 use App\Integration\Models\IntegrationRecord;
 use App\Integration\Providers\GoHighLevelProvider;
 use App\Integration\Services\SyncService;
+use App\Metric\Services\MetricService;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -34,6 +36,9 @@ class GhlOpportunityFieldPickerTest extends TestCase
 
     /** Defined in GHL, but no opportunity has ever carried a value for it. */
     private const CF_UNUSED = 'Nv3rF1ll3dF13ldXXXXX';
+
+    /** A DATE field ("Email 1 TS"), which GHL delivers under a type-named key. */
+    private const CF_DATE = '3nUAsRfrzScSmTITrvEn';
 
     private function integration(array $config = ['datasets' => ['Opportunities']]): Integration
     {
@@ -63,6 +68,7 @@ class GhlOpportunityFieldPickerTest extends TestCase
                 ['id' => self::CF_OUTREACH, 'name' => 'Outreach Stages', 'dataType' => 'CHECKBOX', 'model' => 'opportunity'],
                 ['id' => self::CF_LINKEDIN, 'name' => 'LinkedIn URL', 'dataType' => 'TEXT', 'model' => 'opportunity'],
                 ['id' => self::CF_UNUSED, 'name' => 'Never Filled', 'dataType' => 'TEXT', 'model' => 'opportunity'],
+                ['id' => self::CF_DATE, 'name' => 'Email 1 TS', 'dataType' => 'DATE', 'model' => 'opportunity'],
             ]]),
             "{$base}/opportunities/search*" => Http::response([
                 'opportunities' => [[
@@ -88,6 +94,8 @@ class GhlOpportunityFieldPickerTest extends TestCase
                     'customFields' => [
                         ['fieldValueString' => 'http://linkedin.com/in/mariano', 'id' => self::CF_LINKEDIN, 'type' => 'string'],
                         ['fieldValueArray' => ['1st Email', '1st Linked-IN'], 'id' => self::CF_OUTREACH, 'type' => 'array'],
+                        // Not fieldValueString — GHL names the key after the type.
+                        ['fieldValueDate' => '2026-09-09', 'id' => self::CF_DATE, 'type' => 'date'],
                     ],
                 ]],
                 'meta' => ['total' => 1],
@@ -224,6 +232,52 @@ class GhlOpportunityFieldPickerTest extends TestCase
         $this->assertArrayHasKey('Never Filled', $row);
         $this->assertArrayNotHasKey('cf:gone-from-ghl', $row);
         $this->assertArrayNotHasKey('gone-from-ghl', $row);
+    }
+
+    /**
+     * The end-to-end case a date column exists for: pick a DATE custom field,
+     * sync, then count the rows whose day falls in a window.
+     *
+     * The value arrives under fieldValueDate rather than fieldValueString. A
+     * chain that only knew the string/array keys wrote "" here, so the column
+     * appeared in the builder, rendered blank, and made every date filter
+     * report zero — indistinguishable from nobody having filled the field in.
+     */
+    public function test_a_date_custom_field_syncs_and_answers_a_date_filter(): void
+    {
+        Carbon::setTestNow('2026-09-09 01:54:00');
+
+        $this->fakeGhl();
+
+        $integration = $this->integration([
+            'datasets' => ['Opportunities'],
+            'opportunity_fields' => ['cf:'.self::CF_DATE],
+        ]);
+        app(SyncService::class)->run($integration);
+
+        $this->assertSame('2026-09-09', $this->opportunityRow($integration)['Email 1 TS']);
+
+        foreach (['date_today', 'date_this_week', 'date_this_month'] as $operator) {
+            $this->assertSame(1.0, app(MetricService::class)->computeSimple([
+                'integration_id' => $integration->id,
+                'sheet' => 'Opportunities',
+                'agg' => 'count_if',
+                'filters' => [['column' => 'Email 1 TS', 'operator' => $operator, 'value' => '']],
+            ]), $operator.' should have matched the synced row');
+        }
+
+        Carbon::setTestNow();
+    }
+
+    /** The same key tolerance on the legacy path, so unpicked fields behave too. */
+    public function test_a_date_custom_field_carries_its_value_without_a_selection(): void
+    {
+        $this->fakeGhl();
+
+        $integration = $this->integration(['datasets' => ['Opportunities']]);
+        app(SyncService::class)->run($integration);
+
+        $this->assertSame('2026-09-09', $this->opportunityRow($integration)['Email 1 TS']);
     }
 
     /* ============ the legacy / empty distinction ============ */
