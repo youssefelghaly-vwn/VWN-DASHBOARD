@@ -96,30 +96,23 @@
     <div class="col-span-4" x-show="{{ $bind }}.filter_column" x-cloak>
         <label class="block text-[10px] mb-1" style="color:var(--ink-soft);">Condition</label>
         <select x-model="{{ $bind }}.filter_operator"
+                @change="window.filterOnOperatorChange({{ $bind }}, 'filter_value', 'filter_operator')"
                 class="w-full rounded text-xs px-2 py-1.5"
                 style="border:1px solid var(--line);background:var(--panel);">
-            <option value="eq">equals</option>
-            <option value="neq">does not equal</option>
-            <option value="contains">contains</option>
-            <option value="not_contains">does not contain</option>
-            <option value="gt">greater than</option>
-            <option value="lt">less than</option>
-            <option value="has_all">has all of (comma-sep)</option>
-            <option value="has_any">has any of (comma-sep)</option>
-            <option value="not_has_any">has none of (comma-sep)</option>
-            <option value="not_empty">is not empty</option>
-            <option value="empty">is empty</option>
+            @include('admin.partials.filter-operator-options')
         </select>
     </div>
 
     <div class="col-span-4"
-         x-show="{{ $bind }}.filter_column && !['not_empty','empty'].includes({{ $bind }}.filter_operator)"
+         x-show="{{ $bind }}.filter_column && window.filterInput({{ $bind }}.filter_operator) !== 'none'"
          x-cloak>
         <label class="block text-[10px] mb-1" style="color:var(--ink-soft);">Value</label>
-        <input x-model="{{ $bind }}.filter_value"
-               :placeholder="['has_all','has_any','not_has_any'].includes({{ $bind }}.filter_operator) ? 'e.g. 1st Email, 1st Linked-IN' : 'e.g. Booked'"
-               class="w-full rounded text-xs px-2 py-1.5"
-               style="border:1px solid var(--line);background:var(--panel);">
+        @include('admin.partials.filter-value-input', ['filterObj' => $bind, 'filterValueKey' => 'filter_value', 'filterOpKey' => 'filter_operator'])
+        <p class="mt-1 text-[10px] leading-tight" style="color:var(--ink-soft);"
+           x-show="String({{ $bind }}.filter_operator).startsWith('date_')" x-cloak>
+            Relative windows are measured against today each time the metric is read, so
+            “in the last N days” still means the last N days tomorrow.
+        </p>
         <p class="mt-1 text-[10px] leading-tight" style="color:var(--ink-soft);"
            x-show="['has_all','has_any','not_has_any'].includes({{ $bind }}.filter_operator)" x-cloak>
             For multi-value fields (e.g. Outreach Stages). Separate values with commas —
@@ -154,25 +147,15 @@
                     </select>
                 </div>
                 <div class="col-span-4">
-                    <select x-model="cond.operator" class="w-full rounded text-xs px-2 py-1.5"
+                    <select x-model="cond.operator"
+                            @change="window.filterOnOperatorChange(cond, 'value', 'operator')"
+                            class="w-full rounded text-xs px-2 py-1.5"
                             style="border:1px solid var(--line);background:var(--panel);">
-                        <option value="eq">equals</option>
-                        <option value="neq">does not equal</option>
-                        <option value="contains">contains</option>
-                        <option value="not_contains">does not contain</option>
-                        <option value="gt">greater than</option>
-                        <option value="lt">less than</option>
-                        <option value="has_all">has all of (comma-sep)</option>
-                        <option value="has_any">has any of (comma-sep)</option>
-                        <option value="not_has_any">has none of (comma-sep)</option>
-                        <option value="not_empty">is not empty</option>
-                        <option value="empty">is empty</option>
+                        @include('admin.partials.filter-operator-options')
                     </select>
                 </div>
-                <div class="col-span-3" x-show="!['not_empty','empty'].includes(cond.operator)" x-cloak>
-                    <input x-model="cond.value" placeholder="value"
-                           class="w-full rounded text-xs px-2 py-1.5"
-                           style="border:1px solid var(--line);background:var(--panel);">
+                <div class="col-span-3" x-show="window.filterInput(cond.operator) !== 'none'" x-cloak>
+                    @include('admin.partials.filter-value-input', ['filterObj' => 'cond'])
                 </div>
                 <div class="col-span-1">
                     <button type="button" @click="{{ $bind }}.filters.splice(ci, 1)"
