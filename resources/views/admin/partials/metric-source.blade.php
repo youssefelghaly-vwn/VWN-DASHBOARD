@@ -107,7 +107,7 @@
          x-show="{{ $bind }}.filter_column && window.filterInput({{ $bind }}.filter_operator) !== 'none'"
          x-cloak>
         <label class="block text-[10px] mb-1" style="color:var(--ink-soft);">Value</label>
-        @include('admin.partials.filter-value-input', ['filterObj' => $bind, 'filterValueKey' => 'filter_value', 'filterOpKey' => 'filter_operator'])
+        @include('admin.partials.filter-value-input', ['filterObj' => $bind, 'filterValueKey' => 'filter_value', 'filterOpKey' => 'filter_operator', 'filterColumnKey' => 'filter_column', 'filterSourceKey' => $bind.'.key'])
         <p class="mt-1 text-[10px] leading-tight" style="color:var(--ink-soft);"
            x-show="String({{ $bind }}.filter_operator).startsWith('date_')" x-cloak>
             Relative windows are measured against today each time the metric is read, so
@@ -155,7 +155,7 @@
                     </select>
                 </div>
                 <div class="col-span-3" x-show="window.filterInput(cond.operator) !== 'none'" x-cloak>
-                    @include('admin.partials.filter-value-input', ['filterObj' => 'cond'])
+                    @include('admin.partials.filter-value-input', ['filterObj' => 'cond', 'filterSourceKey' => $bind.'.key'])
                 </div>
                 <div class="col-span-1">
                     <button type="button" @click="{{ $bind }}.filters.splice(ci, 1)"

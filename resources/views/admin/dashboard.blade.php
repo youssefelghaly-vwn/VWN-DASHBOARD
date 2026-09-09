@@ -509,7 +509,7 @@
                                         @include('admin.partials.filter-operator-options')
                                     </select>
                                     <div class="col-span-3" x-show="window.filterInput(cond.operator) !== 'none'" x-cloak>
-                                        @include('admin.partials.filter-value-input', ['filterObj' => 'cond'])
+                                        @include('admin.partials.filter-value-input', ['filterObj' => 'cond', 'filterSourceKey' => 'builder.key'])
                                     </div>
                                     <button type="button" @click="builder.filters.splice(ci, 1)"
                                         class="col-span-1 text-sm" style="color:var(--coral);">✕</button>
@@ -1332,6 +1332,25 @@ function dashboard(cfg) {
 
             const res = await fetch(url, { headers: { Accept: 'application/json' } });
             return res.ok ? res.json() : [];
+        },
+
+        /**
+         * The values a column actually holds, for the filter box's suggestion
+         * list. Cached per source+column and fetched once, lazily: an admin
+         * guessing at a spelling ("true" for a column holding "Yes") is the
+         * usual reason a filter silently returns zero.
+         */
+        valueOptions(key, column) {
+            if (!key || !column) return [];
+
+            const cacheKey = key + '::' + column;
+
+            if (!(cacheKey in this.distinctCache)) {
+                this.distinctCache[cacheKey] = [];
+                this.fetchDistinct(key, column).then(v => this.distinctCache[cacheKey] = v.slice(0, 200));
+            }
+
+            return this.distinctCache[cacheKey];
         },
 
         // Options come from the "Pipeline Stages" catalogue dataset (every
