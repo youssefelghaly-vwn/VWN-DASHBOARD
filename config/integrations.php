@@ -1,5 +1,6 @@
 <?php
 
+use App\Integration\Providers\CloudTalkProvider;
 use App\Integration\Providers\GoHighLevelProvider;
 use App\Integration\Providers\GoogleSheetsProvider;
 use App\Integration\Providers\MetaAdsProvider;
@@ -21,6 +22,7 @@ return [
         'gohighlevel' => GoHighLevelProvider::class,
         'google_sheets' => GoogleSheetsProvider::class,
         'meta_ads' => MetaAdsProvider::class,
+        'cloudtalk' => CloudTalkProvider::class,
     ],
 
     /*
@@ -46,6 +48,30 @@ return [
         'max_calendars' => env('GHL_MAX_CALENDARS', 15),
         'events_days_back' => env('GHL_EVENTS_DAYS_BACK', 90),
         'events_days_forward' => env('GHL_EVENTS_DAYS_FORWARD', 30),
+    ],
+
+    'cloudtalk' => [
+        // CloudTalk core API. The Dialer partner API (api.cloudtalk.io/v1) is a
+        // different surface with different auth; this provider speaks the core one.
+        'api_base' => env('CLOUDTALK_API_BASE', 'https://my.cloudtalk.io/api'),
+
+        // Cloudflare fronts *.cloudtalk.io and answers default library user
+        // agents with a bot challenge (error 1010) instead of the API.
+        'user_agent' => env('CLOUDTALK_USER_AGENT', 'VWN-Dashboard/1.0'),
+
+        'timeout' => env('CLOUDTALK_TIMEOUT', 30),
+        'connect_timeout' => env('CLOUDTALK_CONNECT_TIMEOUT', 10),
+        'retries' => env('CLOUDTALK_RETRIES', 2),
+
+        // The account-wide rate limit is 60 requests/minute shared across every
+        // key, so page in bounded batches rather than racing through history.
+        'page_size' => 100,
+        'max_pages' => env('CLOUDTALK_MAX_PAGES', 20),
+
+        // How far back each sync pulls call history. Every call is stored
+        // locally and a dataset is read into memory whole, so widen this
+        // deliberately — 30 days of a busy dialer is already a lot of rows.
+        'days_back' => env('CLOUDTALK_DAYS_BACK', 30),
     ],
 
     'meta_ads' => [
