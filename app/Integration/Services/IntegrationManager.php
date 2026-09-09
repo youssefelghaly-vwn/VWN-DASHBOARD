@@ -27,11 +27,27 @@ class IntegrationManager
         return array_keys($this->map);
     }
 
-    /** Resolve a provider by its key. */
+    /**
+     * Resolve a provider by its key.
+     *
+     * The "unknown provider" case is almost never a typo — it is a stored
+     * integration whose provider was added to config/integrations.php after the
+     * process running this was started. A queued sync is the usual victim: the
+     * web process picks the new config up on its next request, while a
+     * long-running queue worker holds the old map in memory until it is
+     * restarted, so connecting works and only syncing fails. The message says
+     * so, because "Unknown integration provider: cloudtalk" against code that
+     * plainly registers cloudtalk sends you looking in the wrong place.
+     */
     public function get(string $key): IntegrationProvider
     {
         if (! isset($this->map[$key])) {
-            throw new InvalidArgumentException("Unknown integration provider: {$key}");
+            throw new InvalidArgumentException(
+                "Unknown integration provider: {$key}. This process knows: "
+                .(implode(', ', $this->keys()) ?: 'none')
+                .'. If '.$key.' is registered in config/integrations.php, this process is running older '
+                .'config — clear the config cache and restart the queue workers.'
+            );
         }
 
         return app($this->map[$key]);
