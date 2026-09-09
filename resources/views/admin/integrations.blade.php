@@ -94,6 +94,22 @@
                                 <input name="ad_account_id" value="{{ $integration->credential('ad_account_id') }}" class="w-full rounded-lg text-sm px-3 py-2"
                                        style="border:1px solid var(--line);background:var(--panel);">
                             </div>
+                        @elseif ($integration->provider === 'cloudtalk')
+                            <div>
+                                <label class="block text-xs font-semibold mb-1.5">Access Key ID</label>
+                                <input name="access_key_id" value="{{ $integration->credential('access_key_id') }}" class="w-full rounded-lg text-sm px-3 py-2"
+                                       style="border:1px solid var(--line);background:var(--panel);">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold mb-1.5">Access Key Secret</label>
+                                <input name="access_key_secret" placeholder="Leave blank to keep the current secret" class="w-full rounded-lg text-sm px-3 py-2"
+                                       style="border:1px solid var(--line);background:var(--panel);">
+                            </div>
+                            <div class="col-span-2 text-[11px]" style="color:var(--ink-soft);">
+                                Call history syncs the last {{ config('integrations.cloudtalk.days_back', 30) }} days
+                                (<span class="mono">CLOUDTALK_DAYS_BACK</span>). Metrics read the synced rows, so widening
+                                the window is what makes older dates answerable.
+                            </div>
                         @endif
 
                         <div class="col-span-2">
@@ -159,6 +175,26 @@
                             <label class="block text-xs font-semibold mb-1.5">Sheet/tab names (comma-separated)</label>
                             <input name="sheet_names" placeholder="Leads, Output, SDR Performance" class="w-full rounded-lg text-sm px-3 py-2"
                                    style="border:1px solid var(--line);background:var(--panel-alt);">
+                        </div>
+                    </div>
+                </template>
+
+                {{-- CloudTalk --}}
+                <template x-if="provider === 'cloudtalk'">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="col-span-2">
+                            <label class="block text-xs font-semibold mb-1.5">Access Key ID</label>
+                            <input name="access_key_id" class="w-full rounded-lg text-sm px-3 py-2"
+                                   style="border:1px solid var(--line);background:var(--panel-alt);">
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block text-xs font-semibold mb-1.5">Access Key Secret</label>
+                            <input name="access_key_secret" type="password" class="w-full rounded-lg text-sm px-3 py-2"
+                                   style="border:1px solid var(--line);background:var(--panel-alt);">
+                        </div>
+                        <div class="col-span-2 text-[11px]" style="color:var(--ink-soft);">
+                            Generate a key pair under Account → Settings → API Keys in CloudTalk. It must belong to an
+                            Admin user, and the account needs the Essential plan or above for the core API.
                         </div>
                     </div>
                 </template>
