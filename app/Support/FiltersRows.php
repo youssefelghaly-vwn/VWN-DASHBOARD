@@ -2,11 +2,15 @@
 
 namespace App\Support;
 
+use Carbon\CarbonImmutable;
+
 /**
  * Applies a list of {column, operator, value} conditions to an array of rows,
  * ANDed together. Shared by MetricService (row-level filtering before an
  * aggregate) and DashboardData (row-level filtering before a chart groups
  * rows), so the same filter semantics apply everywhere.
+ *
+ * The operator vocabulary itself lives in FilterOperators.
  */
 trait FiltersRows
 {
@@ -28,6 +32,13 @@ trait FiltersRows
 
     protected function applyOneFilter(array $rows, string $column, string $operator, mixed $value): array
     {
+        // Date windows are resolved ONCE, before the scan: every row has to be
+        // measured against the same "today", and re-deriving the window per row
+        // would also mean a Carbon construction per record.
+        if (str_starts_with($operator, 'date_')) {
+            return $this->applyDateFilter($rows, $column, $operator, $value);
+        }
+
         $needle = mb_strtolower(trim((string) $value));
 
         return array_values(array_filter($rows, function ($row) use ($column, $operator, $needle) {
@@ -88,6 +99,154 @@ trait FiltersRows
         }
 
         return array_intersect($want, $this->listTokens($cell)) !== [];
+    }
+
+    /**
+     * Keep the rows whose $column falls inside the operator's day window.
+     *
+     * Cells that are empty or do not look like a date never match — a date
+     * question about a blank cell has no true answer. An unusable window (the
+     * admin picked "is on" but typed nothing) matches nothing rather than
+     * everything, the same posture gt/lt already take with an unparseable
+     * needle: a visible zero beats a plausible-looking unfiltered total.
+     */
+    private function applyDateFilter(array $rows, string $column, string $operator, mixed $value): array
+    {
+        [$from, $to] = $this->dateWindow($operator, (string) $value);
+
+        if ($from === null && $to === null) {
+            return [];
+        }
+
+        return array_values(array_filter($rows, function ($row) use ($column, $from, $to) {
+            $day = $this->cellDate($row[$column] ?? '');
+
+            if ($day === null) {
+                return false;
+            }
+
+            return ($from === null || $day >= $from) && ($to === null || $day <= $to);
+        }));
+    }
+
+    /**
+     * The inclusive [from, to] day window an operator means right now. Either
+     * end may be null for an open-ended window ("is before" has no floor);
+     * both null means the operator could not be resolved at all.
+     *
+     * @return array{0: ?CarbonImmutable, 1: ?CarbonImmutable}
+     */
+    protected function dateWindow(string $operator, string $value): array
+    {
+        $today = CarbonImmutable::today();
+        $n = $this->dayCount($value);
+        $on = $this->cellDate($value);
+
+        // "2026-09-01..2026-09-30" — a comma works too, since that is the
+        // separator the other multi-value operators already use.
+        [$start, $end] = array_pad(preg_split('/\s*(?:\.\.|,)\s*/', trim($value), 2), 2, null);
+
+        return match ($operator) {
+            'date_today' => [$today, $today],
+            'date_yesterday' => [$today->subDay(), $today->subDay()],
+            'date_this_week' => [$today->startOfWeek(), $today->endOfWeek()->startOfDay()],
+            'date_this_month' => [$today->startOfMonth(), $today->endOfMonth()->startOfDay()],
+            'date_last_month' => [
+                $today->subMonthNoOverflow()->startOfMonth(),
+                $today->subMonthNoOverflow()->endOfMonth()->startOfDay(),
+            ],
+            // Both windows are exactly N days long and both include today.
+            'date_last_n_days' => $n === null ? [null, null] : [$today->subDays($n - 1), $today],
+            'date_next_n_days' => $n === null ? [null, null] : [$today, $today->addDays($n - 1)],
+            'date_on' => [$on, $on],
+            // Exclusive, so "before the 9th" does not quietly include the 9th.
+            'date_before' => [null, $on?->subDay()],
+            'date_after' => [$on?->addDay(), null],
+            // One usable end is enough — the other side stays open.
+            'date_between' => [$this->cellDate($start), $this->cellDate($end)],
+            default => [null, null],
+        };
+    }
+
+    /** The N of "last N days" — a positive whole number, or null if unusable. */
+    private function dayCount(string $value): ?int
+    {
+        $n = $this->filterNumeric($value);
+
+        return $n !== null && $n >= 1 ? (int) $n : null;
+    }
+
+    /**
+     * A cell or filter bound read as a calendar day, or null when it does not
+     * look like a date.
+     *
+     * Deliberately NOT Carbon::parse(): that reads "1st Email" as a day of the
+     * month and "May" as a month, so a multi-select cell would land inside a
+     * date range. Only the shapes our own data actually produces are accepted —
+     * GHL sends ISO strings ("2026-09-09", "2026-08-24T18:25:36.233Z") or epoch
+     * milliseconds, and CastsValues::date() normalizes to "Y-m-d".
+     */
+    protected function cellDate(mixed $v): ?CarbonImmutable
+    {
+        $s = trim((string) $v);
+
+        if ($s === '') {
+            return null;
+        }
+
+        // Epoch milliseconds (13 digits) or seconds (10), as GHL hands out on
+        // some fields. Narrow digit counts on purpose: a bare integer column
+        // should not start reading as a date.
+        if (ctype_digit($s) && (strlen($s) === 13 || strlen($s) === 10)) {
+            $ms = strlen($s) === 13 ? (int) $s : (int) $s * 1000;
+
+            return CarbonImmutable::createFromTimestampMs($ms, config('app.timezone'))->startOfDay();
+        }
+
+        if (preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ]|$)/', $s, $m)) {
+            return $this->calendarDay((int) $m[1], (int) $m[2], (int) $m[3]);
+        }
+
+        // US-style, as a human might type into the "is on" box.
+        if (preg_match('#^(\d{1,2})/(\d{1,2})/(\d{4})(?:[T ]|$)#', $s, $m)) {
+            return $this->calendarDay((int) $m[3], (int) $m[1], (int) $m[2]);
+        }
+
+        // "Sep 9, 2026" and "9 Sep 2026" — how a CRM's own UI writes a date, and
+        // what lands in the cell if a field ever syncs as its display string.
+        // A month NAME plus a day plus a four-digit year is unambiguous; the
+        // bare "May" or "1st Email" that Carbon::parse would happily read as a
+        // date matches neither pattern.
+        if (preg_match('/^([a-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/i', $s, $m)) {
+            $month = $this->monthNumber($m[1]);
+
+            return $month ? $this->calendarDay((int) $m[3], $month, (int) $m[2]) : null;
+        }
+
+        if (preg_match('/^(\d{1,2})(?:st|nd|rd|th)?\.?\s+([a-z]{3,9})\.?,?\s+(\d{4})$/i', $s, $m)) {
+            $month = $this->monthNumber($m[2]);
+
+            return $month ? $this->calendarDay((int) $m[3], $month, (int) $m[1]) : null;
+        }
+
+        return null;
+    }
+
+    /** 1-12 for an English month name or its three-letter prefix, else null. */
+    private function monthNumber(string $name): ?int
+    {
+        $months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        $index = array_search(mb_strtolower(substr($name, 0, 3)), $months, true);
+
+        return $index === false ? null : $index + 1;
+    }
+
+    /** Rejects a well-shaped but impossible date (2026-02-31) instead of rolling it over. */
+    private function calendarDay(int $year, int $month, int $day): ?CarbonImmutable
+    {
+        return checkdate($month, $day, $year)
+            ? CarbonImmutable::create($year, $month, $day, 0, 0, 0)
+            : null;
     }
 
     private function filterNumeric(mixed $v): ?float

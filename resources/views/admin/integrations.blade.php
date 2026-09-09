@@ -100,6 +100,13 @@
                             <button class="px-4 py-2 rounded-lg text-sm font-semibold text-white" style="background:var(--mint-deep);">Save changes</button>
                         </div>
                     </form>
+
+                    @if ($integration->provider === 'gohighlevel')
+                        @include('admin.partials.ghl-opportunity-fields', [
+                            'integration' => $integration,
+                            'fields' => $opportunityFields[$integration->id] ?? [],
+                        ])
+                    @endif
                 </div>
                 </div>
             @empty

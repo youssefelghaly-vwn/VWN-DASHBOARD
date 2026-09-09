@@ -6,6 +6,7 @@ use App\Dashboard\Models\Chart;
 use App\Dashboard\Models\Dashboard;
 use App\Dashboard\Services\DashboardData;
 use App\Http\Controllers\Controller;
+use App\Support\FilterOperators;
 use Illuminate\Http\Request;
 
 class ChartController extends Controller
@@ -16,8 +17,6 @@ class ChartController extends Controller
     ];
 
     private const AGGS = ['count', 'sum', 'avg', 'min', 'max'];
-
-    private const OPS = ['eq', 'neq', 'contains', 'not_contains', 'gt', 'lt', 'has_all', 'has_any', 'not_has_any', 'not_empty', 'empty'];
 
     public function store(Request $request, Dashboard $dashboard, DashboardData $data)
     {
@@ -59,7 +58,7 @@ class ChartController extends Controller
             'height' => ['nullable', 'integer', 'min:160', 'max:900'],
             'filters' => ['nullable', 'array'],
             'filters.*.column' => ['nullable', 'string'],
-            'filters.*.operator' => ['nullable', 'in:'.implode(',', self::OPS)],
+            'filters.*.operator' => ['nullable', 'in:'.implode(',', FilterOperators::keys())],
             'filters.*.value' => ['nullable', 'string', 'max:255'],
             'series' => ['required', 'array', 'min:1'],
             'series.*.integration_id' => ['nullable', 'integer', 'exists:integrations,id'],

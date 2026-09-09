@@ -502,24 +502,15 @@
                                             <option :value="col" x-text="col"></option>
                                         </template>
                                     </select>
-                                    <select x-model="cond.operator" class="col-span-4 rounded text-xs px-2 py-1.5"
+                                    <select x-model="cond.operator"
+                                        @change="window.filterOnOperatorChange(cond, 'value', 'operator')"
+                                        class="col-span-4 rounded text-xs px-2 py-1.5"
                                         style="border:1px solid var(--line);background:var(--panel);">
-                                        <option value="eq">equals</option>
-                                        <option value="neq">does not equal</option>
-                                        <option value="contains">contains</option>
-                                        <option value="not_contains">does not contain</option>
-                                        <option value="gt">greater than</option>
-                                        <option value="lt">less than</option>
-                                        <option value="has_all">has all of (comma-sep)</option>
-                                        <option value="has_any">has any of (comma-sep)</option>
-                                        <option value="not_has_any">has none of (comma-sep)</option>
-                                        <option value="not_empty">is not empty</option>
-                                        <option value="empty">is empty</option>
+                                        @include('admin.partials.filter-operator-options')
                                     </select>
-                                    <input x-model="cond.value" placeholder="value"
-                                        x-show="!['not_empty','empty'].includes(cond.operator)"
-                                        class="col-span-3 rounded text-xs px-2 py-1.5"
-                                        style="border:1px solid var(--line);background:var(--panel);">
+                                    <div class="col-span-3" x-show="window.filterInput(cond.operator) !== 'none'" x-cloak>
+                                        @include('admin.partials.filter-value-input', ['filterObj' => 'cond'])
+                                    </div>
                                     <button type="button" @click="builder.filters.splice(ci, 1)"
                                         class="col-span-1 text-sm" style="color:var(--coral);">✕</button>
                                 </div>
@@ -917,6 +908,10 @@
         </div>
 
         @push('scripts')
+            {{-- Shared filter-condition helpers; must load before Alpine boots
+                 the builders, whose x-show expressions call them. --}}
+            @include('admin.partials.filter-operator-script')
+
             <script>
 function dashboard(cfg) {
     return {

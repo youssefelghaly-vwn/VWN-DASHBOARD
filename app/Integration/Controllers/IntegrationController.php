@@ -19,9 +19,18 @@ class IntegrationController extends Controller
 
     public function index()
     {
+        $integrations = Integration::with('latestSyncRun')->orderBy('name')->get();
+
         return view('admin.integrations', [
-            'integrations' => Integration::with('latestSyncRun')->orderBy('name')->get(),
+            'integrations' => $integrations,
             'catalogue' => $this->manager->catalogue(),
+            // GoHighLevel's opportunity-field picker renders the catalogue its
+            // last sync wrote; resolved here, keyed by integration id, so the
+            // view stays a dumb renderer and never reaches into a provider.
+            'opportunityFields' => $integrations
+                ->filter(fn (Integration $i) => $i->provider === 'gohighlevel')
+                ->mapWithKeys(fn (Integration $i) => [$i->id => $i->provider()->opportunityFieldCatalogue($i)])
+                ->all(),
         ]);
     }
 

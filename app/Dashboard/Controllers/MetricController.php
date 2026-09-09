@@ -6,13 +6,12 @@ use App\Dashboard\Models\Dashboard;
 use App\Dashboard\Models\Metric;
 use App\Http\Controllers\Controller;
 use App\Metric\Services\MetricService;
+use App\Support\FilterOperators;
 use Illuminate\Http\Request;
 
 class MetricController extends Controller
 {
     private const AGGS = ['count', 'count_if', 'percent_if', 'sum', 'avg', 'min', 'max'];
-
-    private const OPS = ['eq', 'neq', 'contains', 'not_contains', 'gt', 'lt', 'has_all', 'has_any', 'not_has_any', 'not_empty', 'empty'];
 
     public function index(Dashboard $dashboard, MetricService $metrics)
     {
@@ -70,11 +69,11 @@ class MetricController extends Controller
             'agg' => ['required_if:mode,simple', 'nullable', 'in:'.implode(',', self::AGGS)],
             'column' => ['nullable', 'string'],
             'filter_column' => ['nullable', 'string'],
-            'filter_operator' => ['nullable', 'in:'.implode(',', self::OPS)],
+            'filter_operator' => ['nullable', 'in:'.implode(',', FilterOperators::keys())],
             'filter_value' => ['nullable', 'string', 'max:255'],
             'filters' => ['nullable', 'array'],
             'filters.*.column' => ['nullable', 'string'],
-            'filters.*.operator' => ['nullable', 'in:'.implode(',', self::OPS)],
+            'filters.*.operator' => ['nullable', 'in:'.implode(',', FilterOperators::keys())],
             'filters.*.value' => ['nullable', 'string', 'max:255'],
 
             'expression' => ['required_if:mode,formula', 'nullable', 'string', 'max:200', 'regex:/^[\w\s{}+\-*\/().]+$/'],
@@ -84,11 +83,11 @@ class MetricController extends Controller
             'variables.*.agg' => ['required', 'in:'.implode(',', self::AGGS)],
             'variables.*.column' => ['nullable', 'string'],
             'variables.*.filter_column' => ['nullable', 'string'],
-            'variables.*.filter_operator' => ['nullable', 'in:'.implode(',', self::OPS)],
+            'variables.*.filter_operator' => ['nullable', 'in:'.implode(',', FilterOperators::keys())],
             'variables.*.filter_value' => ['nullable', 'string', 'max:255'],
             'variables.*.filters' => ['nullable', 'array'],
             'variables.*.filters.*.column' => ['nullable', 'string'],
-            'variables.*.filters.*.operator' => ['nullable', 'in:'.implode(',', self::OPS)],
+            'variables.*.filters.*.operator' => ['nullable', 'in:'.implode(',', FilterOperators::keys())],
             'variables.*.filters.*.value' => ['nullable', 'string', 'max:255'],
         ];
 
