@@ -61,11 +61,53 @@ trait FiltersRows
                 'has_all' => $this->listHasAll($raw, $needle),
                 'has_any' => $this->listHasAny($raw, $needle),
                 'not_has_any' => ! $this->listHasAny($raw, $needle),
+                // Deliberately not complements: a cell that is neither (blank,
+                // "Unknown", free text) matches neither, the same way an
+                // unclassifiable call is not counted as a miss.
+                'is_true' => $this->truthiness($raw) === true,
+                'is_false' => $this->truthiness($raw) === false,
                 'not_empty' => $hay !== '',
                 'empty' => $hay === '',
                 default => true,
             };
         }));
+    }
+
+    /**
+     * Read a cell as a boolean, or null when it does not state one.
+     *
+     * Only an explicit vocabulary counts — never "any non-empty string is
+     * true", which would make `is true` match every populated text cell. A
+     * value outside it (blank, "Unknown", a name) has no boolean answer, so it
+     * matches neither is_true nor is_false.
+     */
+    private function truthiness(mixed $value): ?bool
+    {
+        // Checked before any string cast, because (string) false is '' — a real
+        // boolean false would otherwise read as an empty cell.
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            return $value != 0;
+        }
+
+        $word = mb_strtolower(trim((string) $value));
+
+        if ($word === '') {
+            return null;
+        }
+
+        if (is_numeric($word)) {
+            return (float) $word != 0.0;
+        }
+
+        return match ($word) {
+            'true', 'yes', 'y', 'on' => true,
+            'false', 'no', 'n', 'off' => false,
+            default => null,
+        };
     }
 
     /** Split a comma-separated cell/needle into lowercased, trimmed, non-empty tokens. */

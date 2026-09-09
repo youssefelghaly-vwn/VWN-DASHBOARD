@@ -28,6 +28,13 @@ final class FilterOperators
         'gt' => ['label' => 'greater than', 'input' => 'number', 'group' => 'Number'],
         'lt' => ['label' => 'less than', 'input' => 'number', 'group' => 'Number'],
 
+        // Boolean columns are spelled differently by every source — "Yes"/"No"
+        // from a provider's own ternary, "true"/"false" from CastsValues::str()
+        // on a real bool, 1/0 from a spreadsheet — so these ask the question
+        // instead of making an admin guess which spelling landed in the cell.
+        'is_true' => ['label' => 'is true (yes / 1)', 'input' => 'none', 'group' => 'Yes / No'],
+        'is_false' => ['label' => 'is false (no / 0)', 'input' => 'none', 'group' => 'Yes / No'],
+
         'has_all' => ['label' => 'has all of (comma-sep)', 'input' => 'text', 'group' => 'List'],
         'has_any' => ['label' => 'has any of (comma-sep)', 'input' => 'text', 'group' => 'List'],
         'not_has_any' => ['label' => 'has none of (comma-sep)', 'input' => 'text', 'group' => 'List'],
