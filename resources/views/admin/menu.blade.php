@@ -45,18 +45,35 @@
                 <h3 class="display text-[14.5px] font-semibold uppercase tracking-wide">Menu items</h3>
             </div>
             @forelse ($items as $item)
-                <div class="px-5 py-4 flex items-center justify-between gap-3"
-                     @if (! $loop->last) style="border-bottom:1px solid var(--line);" @endif>
-                    <div>
-                        <div class="font-semibold text-sm">{{ $item->label }}</div>
-                        <div class="mono text-[11px]" style="color:var(--ink-soft);">
-                            {{ $item->dashboard ? 'Dashboard · '.$item->dashboard->name : ($item->url ?: 'Link') }}
+                <div @if (! $loop->last || $item->children->count()) style="border-bottom:1px solid var(--line);" @endif>
+                    <div class="px-5 py-4 flex items-center justify-between gap-3">
+                        <div>
+                            <div class="font-semibold text-sm">{{ $item->label }}</div>
+                            <div class="mono text-[11px]" style="color:var(--ink-soft);">
+                                {{ $item->dashboard ? 'Dashboard · '.$item->dashboard->name : ($item->url ?: ($item->children->count() ? 'Group' : 'Link')) }}
+                            </div>
                         </div>
+                        <form method="POST" action="{{ route('admin.menu.destroy', $item) }}"
+                              @if ($item->children->count()) onsubmit="return confirm('Delete \'{{ $item->label }}\'? Its {{ $item->children->count() }} sub-item(s) move back to top level.')" @endif>
+                            @csrf @method('DELETE')
+                            <button class="px-3 py-1.5 rounded-lg text-xs font-medium" style="color:var(--coral);border:1px solid var(--line);">Remove</button>
+                        </form>
                     </div>
-                    <form method="POST" action="{{ route('admin.menu.destroy', $item) }}">
-                        @csrf @method('DELETE')
-                        <button class="px-3 py-1.5 rounded-lg text-xs font-medium" style="color:var(--coral);border:1px solid var(--line);">Remove</button>
-                    </form>
+                    @foreach ($item->children as $child)
+                        <div class="pl-9 pr-5 py-3 flex items-center justify-between gap-3"
+                             style="background:var(--panel-alt);{{ !$loop->last || !$loop->parent->last ? 'border-bottom:1px solid var(--line);' : '' }}">
+                            <div>
+                                <div class="text-sm">{{ $child->label }}</div>
+                                <div class="mono text-[11px]" style="color:var(--ink-soft);">
+                                    {{ $child->dashboard ? 'Dashboard · '.$child->dashboard->name : ($child->url ?: 'Link') }}
+                                </div>
+                            </div>
+                            <form method="POST" action="{{ route('admin.menu.destroy', $child) }}">
+                                @csrf @method('DELETE')
+                                <button class="px-3 py-1.5 rounded-lg text-xs font-medium" style="color:var(--coral);border:1px solid var(--line);">Remove</button>
+                            </form>
+                        </div>
+                    @endforeach
                 </div>
             @empty
                 <div class="px-5 py-8 text-center text-sm" style="color:var(--ink-soft);">No custom menu items yet.</div>
@@ -79,6 +96,16 @@
                             style="border:1px solid var(--line);background:var(--panel-alt);">
                         <option value="dashboard">Dashboard</option>
                         <option value="link">Custom link</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold mb-1.5">Parent</label>
+                    <select name="parent_id" class="w-full rounded-lg text-sm px-3 py-2"
+                            style="border:1px solid var(--line);background:var(--panel-alt);">
+                        <option value="">— Top level —</option>
+                        @foreach ($topLevelItems as $top)
+                            <option value="{{ $top->id }}">Under “{{ $top->label }}”</option>
+                        @endforeach
                     </select>
                 </div>
                 <div x-show="kind === 'dashboard'">

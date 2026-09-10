@@ -67,12 +67,47 @@
             </a>
 
             @foreach (($menuTree ?? []) as $item)
-                @php $active = $item->dashboard && request()->routeIs('admin.dashboards.show') && request()->route('dashboard')?->slug === $item->dashboard->slug; @endphp
-                <a href="{{ $item->href() }}" @click="mobileNav = false"
-                   class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] transition"
-                   style="{{ $active ? 'background:rgba(79,227,166,0.12);color:var(--mint);font-weight:600;' : 'color:#B9CCC4;' }}">
-                    <span class="text-base leading-none">◧</span><span>{{ $item->label }}</span>
-                </a>
+                @php
+                    $active = $item->dashboard && request()->routeIs('admin.dashboards.show') && request()->route('dashboard')?->slug === $item->dashboard->slug;
+                    $childActive = $item->children->contains(fn ($c) => $c->dashboard && request()->routeIs('admin.dashboards.show') && request()->route('dashboard')?->slug === $c->dashboard->slug);
+                @endphp
+                @if ($item->children->isEmpty())
+                    <a href="{{ $item->href() }}" @click="mobileNav = false"
+                       class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] transition"
+                       style="{{ $active ? 'background:rgba(79,227,166,0.12);color:var(--mint);font-weight:600;' : 'color:#B9CCC4;' }}">
+                        <span class="text-base leading-none">◧</span><span>{{ $item->label }}</span>
+                    </a>
+                @else
+                    {{-- A group: its own row toggles open/closed; the row itself links
+                         nowhere (href() would be '#') unless the admin also gave it a
+                         dashboard, in which case it's still a normal link. --}}
+                    <div x-data="{ open: {{ $childActive ? 'true' : 'false' }} }">
+                        <button type="button" @click="open = !open"
+                                class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] transition"
+                                style="{{ $active || $childActive ? 'color:var(--mint);font-weight:600;' : 'color:#B9CCC4;' }}">
+                            <span class="text-base leading-none">◧</span>
+                            <span class="flex-1 text-left">{{ $item->label }}</span>
+                            <span class="text-[10px] transition" :style="open ? 'transform:rotate(90deg);' : ''">▸</span>
+                        </button>
+                        <div x-show="open" x-transition:enter="transition ease-out duration-150"
+                             x-transition:enter-start="opacity-0 -translate-y-1"
+                             x-transition:enter-end="opacity-100 translate-y-0"
+                             x-transition:leave="transition ease-in duration-100"
+                             x-transition:leave-end="opacity-0 -translate-y-1"
+                             class="ms-3 ps-3 mt-0.5 space-y-1" style="border-left:1px solid var(--sidebar-line);">
+                            @foreach ($item->children as $child)
+                                @php
+                                    $childIsActive = $child->dashboard && request()->routeIs('admin.dashboards.show') && request()->route('dashboard')?->slug === $child->dashboard->slug;
+                                @endphp
+                                <a href="{{ $child->href() }}" @click="mobileNav = false"
+                                   class="flex items-center gap-2 px-3 py-2 rounded-lg text-[12.5px] transition"
+                                   style="{{ $childIsActive ? 'background:rgba(79,227,166,0.12);color:var(--mint);font-weight:600;' : 'color:#8FA79D;' }}">
+                                    <span>{{ $child->label }}</span>
+                                </a>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
             @endforeach
 
             @php

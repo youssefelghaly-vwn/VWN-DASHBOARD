@@ -39,16 +39,31 @@ trait CastsValues
         return $this->str($v);
     }
 
-    protected function date(mixed $v): string
+    /**
+     * See BusinessTimezone for why this trait doesn't use config('app.timezone').
+     */
+    private const DATE_TIMEZONE = BusinessTimezone::NAME;
+
+    protected function date(mixed $v, bool $convertToBusinessTz = true): string
     {
         if (! $v) {
             return '';
         }
 
         try {
-            return is_numeric($v)
-                ? Carbon::createFromTimestampMs((int) $v)->toDateString()
-                : Carbon::parse($v)->toDateString();
+            $carbon = is_numeric($v)
+                ? Carbon::createFromTimestampMs((int) $v)
+                : Carbon::parse($v);
+
+            // A string with its own explicit offset already states a
+            // specific local day. Re-projecting it onto DATE_TIMEZONE is
+            // only correct if that offset agrees with DATE_TIMEZONE's
+            // current DST state — it doesn't always (see CloudTalkProvider,
+            // which passes false: CloudTalk's own offset is the account's
+            // ground truth there, not something to override).
+            return $convertToBusinessTz
+                ? $carbon->setTimezone(self::DATE_TIMEZONE)->toDateString()
+                : $carbon->toDateString();
         } catch (\Throwable) {
             return $this->str($v);
         }

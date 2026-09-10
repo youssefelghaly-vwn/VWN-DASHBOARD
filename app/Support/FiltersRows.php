@@ -14,6 +14,13 @@ use Carbon\CarbonImmutable;
  */
 trait FiltersRows
 {
+    /**
+     * The calendar the date_* filter operators (and the epoch-ms branch of
+     * cellDate()) measure "today" against. See BusinessTimezone for why this
+     * isn't config('app.timezone').
+     */
+    private const FILTER_TIMEZONE = BusinessTimezone::NAME;
+
     protected function filterRows(array $rows, array $filters): array
     {
         foreach ($filters as $filter) {
@@ -180,7 +187,7 @@ trait FiltersRows
      */
     protected function dateWindow(string $operator, string $value): array
     {
-        $today = CarbonImmutable::today();
+        $today = CarbonImmutable::now(self::FILTER_TIMEZONE)->startOfDay();
         $n = $this->dayCount($value);
         $on = $this->cellDate($value);
 
@@ -242,7 +249,7 @@ trait FiltersRows
         if (ctype_digit($s) && (strlen($s) === 13 || strlen($s) === 10)) {
             $ms = strlen($s) === 13 ? (int) $s : (int) $s * 1000;
 
-            return CarbonImmutable::createFromTimestampMs($ms, config('app.timezone'))->startOfDay();
+            return CarbonImmutable::createFromTimestampMs($ms, self::FILTER_TIMEZONE)->startOfDay();
         }
 
         if (preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ]|$)/', $s, $m)) {

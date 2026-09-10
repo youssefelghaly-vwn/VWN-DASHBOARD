@@ -92,6 +92,78 @@
     'sectionDestroyTemplate' => route('admin.sections.destroy', ['section' => '__ID__']),
 ]))" x-init="boot()" class="px-6 lg:px-8 py-8">
 
+            {{-- ============================ TABLE OF CONTENTS ============================
+                 Floating "on this page" nav. Reuses the same sections/orderedGroups
+                 data already loaded for the layout below — no extra fetch. Jumps by
+                 scrolling to the matching group's :id="'toc-section-' + sectionId"
+                 (set on the group wrapper further down). Active entry is tracked via
+                 an IntersectionObserver so it stays in sync while scrolling by hand. --}}
+            <template x-if="sections.length">
+                <div class="fixed bottom-6 right-6 z-40" x-cloak>
+                    <div x-show="tocOpen" x-transition:enter="transition ease-out duration-150"
+                        x-transition:enter-start="opacity-0 scale-95 translate-y-1"
+                        x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                        x-transition:leave="transition ease-in duration-100"
+                        x-transition:leave-end="opacity-0 scale-95 translate-y-1" @keydown.escape.window="tocOpen = false"
+                        class="mb-3 w-80 max-w-[calc(100vw-3rem)] rounded-2xl overflow-hidden origin-bottom-right"
+                        style="background:var(--sidebar);border:1px solid var(--sidebar-line);box-shadow:0 18px 40px -12px rgba(0,0,0,0.45);">
+
+                        <div class="px-4 pt-4 pb-3" style="border-bottom:1px solid var(--sidebar-line);">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-[10.5px] font-bold uppercase tracking-[1.5px]"
+                                    style="color:var(--mint);">On this page</span>
+                                <span class="text-[10.5px] mono" style="color:#7FA396;"
+                                    x-text="tocEntries().reduce((n, s) => n + 1 + s.subs.length, 0) + ' sections'"></span>
+                            </div>
+                            <input type="text" x-model="tocQuery" placeholder="Filter sections…"
+                                class="w-full text-[12.5px] rounded-lg px-3 py-1.5 outline-none"
+                                style="background:rgba(255,255,255,0.05);border:1px solid var(--sidebar-line);color:#EAF5F0;">
+                        </div>
+
+                        <nav class="py-2 px-2 overflow-y-auto" style="max-height:52vh;">
+                            <template x-for="top in tocEntries()" :key="'toc-' + top.id">
+                                <div class="mb-0.5">
+                                    <button @click="scrollToSection(top.id)"
+                                        class="w-full text-left px-2.5 py-2 rounded-lg text-[13px] font-semibold transition"
+                                        :style="tocActiveId === top.id ?
+                                            'background:rgba(79,227,166,0.12);color:var(--mint);' :
+                                            'color:#EAF5F0;'"
+                                        x-text="top.title"></button>
+
+                                    <template x-if="top.subs.length">
+                                        <div class="ml-3 pl-2.5 mt-0.5 mb-1"
+                                            style="border-left:1px solid var(--sidebar-line);">
+                                            <template x-for="sub in top.subs" :key="'toc-' + sub.id">
+                                                <button @click="scrollToSection(sub.id)"
+                                                    class="w-full text-left px-2 py-1.5 rounded-lg text-[12px] transition"
+                                                    :style="tocActiveId === sub.id ?
+                                                        'background:rgba(79,227,166,0.12);color:var(--mint);font-weight:600;' :
+                                                        'color:#B9CCC4;'"
+                                                    x-text="sub.title"></button>
+                                            </template>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+
+                            <template x-if="tocQuery && !tocEntries().length">
+                                <div class="px-2.5 py-6 text-center text-[12px]" style="color:#7FA396;">
+                                    No sections match “<span x-text="tocQuery"></span>”.
+                                </div>
+                            </template>
+                        </nav>
+                    </div>
+
+                    <button @click="tocOpen = !tocOpen" :aria-expanded="tocOpen" aria-label="Table of contents"
+                        class="w-12 h-12 rounded-full flex items-center justify-center text-lg leading-none transition ml-auto"
+                        style="background:var(--sidebar);border:1px solid var(--sidebar-line);color:var(--mint);box-shadow:0 10px 24px -8px rgba(0,0,0,0.45);"
+                        onmouseover="this.style.borderColor='var(--mint)'" onmouseout="this.style.borderColor='var(--sidebar-line)'">
+                        <span x-show="!tocOpen">☰</span>
+                        <span x-show="tocOpen" x-cloak>✕</span>
+                    </button>
+                </div>
+            </template>
+
             <div class="flex flex-wrap items-end justify-between gap-4 mb-7">
                 <div>
                     <h1 class="display text-2xl font-bold">{{ $dashboard->name }}</h1>
@@ -182,7 +254,7 @@
              each section and its sub-sections in order. Each group draws its own
              metrics grid + charts grid, filtered by section id. --}}
             <template x-for="g in orderedGroups()" :key="g.key">
-                <div
+                <div :id="g.type === 'section' ? 'toc-section-' + g.sectionId : null" class="scroll-mt-6"
                     :class="(g.type === 'ungrouped' && !metricsIn(null).length && !chartsIn(null).length && (metrics.length ||
                         charts.length)) ? '' : 'mb-9'">
                     {{-- Section header (hr + title + controls). Ungrouped has none. --}}
@@ -938,6 +1010,13 @@ function dashboard(cfg) {
         tableRows: [],
         tableQuery: '',
 
+        // Floating table-of-contents (see the fixed panel near the top of the
+        // template): tocOpen toggles the panel, tocQuery filters it, tocActiveId
+        // is kept in sync with scroll position by initTocObserver().
+        tocOpen: false,
+        tocQuery: '',
+        tocActiveId: null,
+
         builder: { open: false, id: null, title: '', type: 'bar', key: '', label_column: '', limit: 10, series: [], filters: [], section_id: '', width: 'full', height: null, error: '', saving: false },
         metric: { open: false, id: null, title: '', subtitle: '', mode: 'simple', format: 'number', decimals: 0, accent: false, section_id: '', simple: {}, varList: [], expression: '', preview: '—', previewError: '', previewing: false, error: '', saving: false, captureToLoop: false, templateIndex: null },
         loop: { open: false, id: null, name: '', key: '', column: '', scopeColumn: '', valueOp: '', valueVal: '', metricTemplates: [], chartTemplates: [], error: '', saving: false },
@@ -978,6 +1057,10 @@ function dashboard(cfg) {
 
             if (!this.sources.length) { this.loading = false; return; }
             this.tableKey = this.firstKey;
+            // Sections are re-fetched (add/rename/delete/move) throughout the
+            // page's life — re-observe their DOM nodes for the TOC every time
+            // the list changes, rather than wiring this into each call site.
+            this.$watch('sections', () => this.$nextTick(() => this.initTocObserver()));
             await Promise.all([this.loadSections(), this.loadLoops(), this.loadCharts(), this.loadMetrics(), this.loadTable()]);
             this.loading = false;
         },
@@ -1212,6 +1295,42 @@ function dashboard(cfg) {
                 for (const sub of this.subSections(top.id)) out.push({ id: sub.id, label: '— ' + sub.title });
             }
             return out;
+        },
+
+        // Top sections (with their matching sub-sections nested under `.subs`),
+        // filtered by tocQuery — a top section stays in the list if its own
+        // title matches OR any of its sub-sections do.
+        tocEntries() {
+            const q = this.tocQuery.trim().toLowerCase();
+            const matches = (title) => !q || title.toLowerCase().includes(q);
+            const out = [];
+            for (const top of this.topSections()) {
+                const subs = this.subSections(top.id).filter(s => matches(s.title));
+                if (matches(top.title) || subs.length) out.push({ ...top, subs });
+            }
+            return out;
+        },
+
+        scrollToSection(id) {
+            const el = document.getElementById('toc-section-' + id);
+            if (!el) return;
+            const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+            this.tocActiveId = id;
+            if (window.innerWidth < 1024) this.tocOpen = false;
+        },
+
+        // Highlights whichever section is currently near the top of the
+        // viewport as the person scrolls, so the TOC tracks position without
+        // needing a click. Re-run after every sections reload (see boot()).
+        initTocObserver() {
+            if (this._tocObserver) this._tocObserver.disconnect();
+            this._tocObserver = new IntersectionObserver((entries) => {
+                const visible = entries.filter(e => e.isIntersecting)
+                    .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+                if (visible[0]) this.tocActiveId = Number(visible[0].target.id.replace('toc-section-', ''));
+            }, { rootMargin: '-15% 0px -70% 0px', threshold: 0 });
+            document.querySelectorAll('[id^="toc-section-"]').forEach(el => this._tocObserver.observe(el));
         },
 
         async addSection(parentId = null) {

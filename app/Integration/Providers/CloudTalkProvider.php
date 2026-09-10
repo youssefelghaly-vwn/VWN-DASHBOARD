@@ -5,6 +5,7 @@ namespace App\Integration\Providers;
 use App\Integration\Models\Integration;
 use App\Integration\Providers\CloudTalk\CloudTalkClient;
 use App\Integration\Services\SyncContext;
+use App\Support\BusinessTimezone;
 use App\Support\CastsValues;
 use Illuminate\Support\Carbon;
 use RuntimeException;
@@ -310,26 +311,17 @@ class CloudTalkProvider implements IntegrationProvider
     }
 
     /**
-     * Was the call answered? Null means the record genuinely does not say.
-     *
-     * The status vocabulary is not fixed across accounts, so match keywords
-     * rather than an enum, and fall back to talk time — a call with no talk
-     * time was not answered — only when no status field turned up at all.
+     * Was the call answered? Determined by talk time alone, on purpose —
+     * no status field involved. The only "status" anywhere in CloudTalk's
+     * payload is Agent.status, which is the agent's live presence
+     * ("offline", "busy", ...), not a call outcome; there's no reliable
+     * per-call status field to fall back to. answered_at was considered and
+     * rejected too: CloudTalk populates it even on a 0-second connect (a
+     * voicemail greeting cut off, an immediate drop, etc.), so its presence
+     * doesn't mean anyone actually talked.
      */
-    private function wasAnswered(mixed $status, ?float $seconds): ?bool
+    private function wasAnswered(?float $seconds): ?bool
     {
-        if ($status !== null && $status !== '') {
-            $value = mb_strtolower($this->str($status));
-
-            if (preg_match('/(not[-_ ]?answer|no[-_ ]?answer|unanswered|missed|busy|fail|cancel|reject|voicemail|abandon)/', $value)) {
-                return false;
-            }
-
-            if (str_contains($value, 'answer')) {
-                return true;
-            }
-        }
-
         return $seconds === null ? null : $seconds > 0;
     }
 
@@ -358,13 +350,14 @@ class CloudTalkProvider implements IntegrationProvider
      * dataset into memory — so an unbounded pull would eventually take the
      * dashboard down. Widen `days_back` deliberately, not by accident.
      */
-    private function fetchCalls(Integration $i): array
+    protected function fetchCalls(Integration $i): array
     {
         $daysBack = max(1, (int) config('integrations.cloudtalk.days_back', 30));
+        $today = Carbon::today(BusinessTimezone::NAME);
 
         return $this->client->paginate($i, '/calls/index.json', [
-            'date_from' => Carbon::today()->subDays($daysBack - 1)->format('Y-m-d 00:00:00'),
-            'date_to' => Carbon::today()->format('Y-m-d 23:59:59'),
+            'date_from' => $today->copy()->subDays($daysBack - 1)->format('Y-m-d 00:00:00'),
+            'date_to' => $today->format('Y-m-d 23:59:59'),
         ])['data'];
     }
 
@@ -472,19 +465,19 @@ class CloudTalkProvider implements IntegrationProvider
         }, $agents));
     }
 
-    private function callRows(array $calls, array $agents): array
+    protected function callRows(array $calls, array $agents): array
     {
         return array_map(function ($call) use ($agents) {
             $flat = $this->flatten($call);
             $id = $this->str($this->pick($flat, ['agent_id', 'user_id'], ''));
-            $startedAt = $this->pick($flat, ['started_at', 'starting_at', 'date', 'datetime', 'created_at']);
+            $answeredAt = $this->pick($flat, ['answered_at']);
             $seconds = $this->talkSeconds($flat);
             $status = $this->pick($flat, ['status']);
-            $answered = $this->wasAnswered($status, $seconds);
+            $answered = $this->wasAnswered($seconds);
 
             return $this->record($this->str($this->pick($flat, ['id'], '')) ?: null, [
-                'Date' => $this->date($startedAt),
-                'Time' => $this->clockTime($startedAt),
+                'Date' => $this->date($answeredAt, convertToBusinessTz: false),
+                'Time' => $this->clockTime($answeredAt),
                 'Agent' => $this->str($agents[$id]['name'] ?? ($id === '' ? 'Unassigned' : "Agent #{$id}")),
                 'Agent ID' => $id,
                 'Direction' => $this->str($this->pick($flat, ['direction', 'call_type', 'type'], '')),
@@ -496,7 +489,7 @@ class CloudTalkProvider implements IntegrationProvider
                 'Contact' => $this->str($this->pick($flat, ['contact_name', 'contact', 'name'], '')),
                 'Number' => $this->str($this->pick($flat, ['public_external_number', 'external_number', 'number', 'phone'], '')),
                 'Campaigns' => $this->str(array_values(array_unique($agents[$id]['campaigns'] ?? []))),
-            ], $this->date($startedAt) ?: null);
+            ], $this->date($answeredAt, convertToBusinessTz: false) ?: null);
         }, $calls);
     }
 
@@ -508,7 +501,8 @@ class CloudTalkProvider implements IntegrationProvider
     private function agentDailyRows(array $calls, array $agents): array
     {
         $stats = $this->tallyBy($calls, fn (array $flat) => $this->date(
-            $this->pick($flat, ['started_at', 'starting_at', 'date', 'datetime', 'created_at'])
+            $this->pick($flat, ['answered_at']),
+            convertToBusinessTz: false
         ));
 
         $rows = [];
@@ -565,7 +559,7 @@ class CloudTalkProvider implements IntegrationProvider
                 $tally['timed']++;
             }
 
-            match ($this->wasAnswered($this->pick($flat, ['status']), $seconds)) {
+            match ($this->wasAnswered($seconds)) {
                 true => $tally['answered']++,
                 false => $tally['notAnswered']++,
                 default => $tally['unknown']++,
