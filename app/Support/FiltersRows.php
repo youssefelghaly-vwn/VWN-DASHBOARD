@@ -290,11 +290,23 @@ trait FiltersRows
         return $index === false ? null : $index + 1;
     }
 
-    /** Rejects a well-shaped but impossible date (2026-02-31) instead of rolling it over. */
+    /**
+     * Rejects a well-shaped but impossible date (2026-02-31) instead of
+     * rolling it over.
+     *
+     * Explicit FILTER_TIMEZONE on purpose — matches dateWindow()'s $today,
+     * which is built the same way. Without it, CarbonImmutable::create()
+     * falls back to config('app.timezone') (UTC), while $today is Cairo —
+     * a 3-hour gap between two things that need to be the same absolute
+     * instant for date_today/date_yesterday's single-point [$today, $today]
+     * window to ever match anything. date_this_week/date_this_month span
+     * wide enough ranges that the same gap rarely pushed a row outside the
+     * boundary, which is why only the single-day operators went to zero.
+     */
     private function calendarDay(int $year, int $month, int $day): ?CarbonImmutable
     {
         return checkdate($month, $day, $year)
-            ? CarbonImmutable::create($year, $month, $day, 0, 0, 0)
+            ? CarbonImmutable::create($year, $month, $day, 0, 0, 0, self::FILTER_TIMEZONE)
             : null;
     }
 

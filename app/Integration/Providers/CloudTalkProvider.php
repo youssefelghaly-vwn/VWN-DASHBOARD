@@ -355,9 +355,15 @@ class CloudTalkProvider implements IntegrationProvider
         $daysBack = max(1, (int) config('integrations.cloudtalk.days_back', 30));
         $today = Carbon::today(BusinessTimezone::NAME);
 
+        // CloudTalk support confirmed the previous "Y-m-d H:i:s" (space
+        // separator) shape was malformed — it wants proper ISO 8601 with a
+        // literal T. Built via concatenation rather than Carbon::format()
+        // with an escaped \T, since the exact clock time here is always a
+        // fixed literal (00:00:00 / 23:59:59), not derived from $today's own
+        // time-of-day.
         return $this->client->paginate($i, '/calls/index.json', [
-            'date_from' => $today->copy()->subDays($daysBack - 1)->format('Y-m-d 00:00:00'),
-            'date_to' => $today->format('Y-m-d 23:59:59'),
+            'date_from' => $today->copy()->subDays($daysBack - 1)->format('Y-m-d') . 'T00:00:00',
+            'date_to' => $today->format('Y-m-d') . 'T23:59:59',
         ])['data'];
     }
 
@@ -476,7 +482,7 @@ class CloudTalkProvider implements IntegrationProvider
             $answered = $this->wasAnswered($seconds);
 
             return $this->record($this->str($this->pick($flat, ['id'], '')) ?: null, [
-                'Date' => $this->date($answeredAt, convertToBusinessTz: false),
+                'Date' => $this->date($answeredAt),
                 'Time' => $this->clockTime($answeredAt),
                 'Agent' => $this->str($agents[$id]['name'] ?? ($id === '' ? 'Unassigned' : "Agent #{$id}")),
                 'Agent ID' => $id,
@@ -489,7 +495,7 @@ class CloudTalkProvider implements IntegrationProvider
                 'Contact' => $this->str($this->pick($flat, ['contact_name', 'contact', 'name'], '')),
                 'Number' => $this->str($this->pick($flat, ['public_external_number', 'external_number', 'number', 'phone'], '')),
                 'Campaigns' => $this->str(array_values(array_unique($agents[$id]['campaigns'] ?? []))),
-            ], $this->date($answeredAt, convertToBusinessTz: false) ?: null);
+            ], $this->date($answeredAt) ?: null);
         }, $calls);
     }
 
@@ -501,8 +507,7 @@ class CloudTalkProvider implements IntegrationProvider
     private function agentDailyRows(array $calls, array $agents): array
     {
         $stats = $this->tallyBy($calls, fn (array $flat) => $this->date(
-            $this->pick($flat, ['answered_at']),
-            convertToBusinessTz: false
+            $this->pick($flat, ['answered_at'])
         ));
 
         $rows = [];

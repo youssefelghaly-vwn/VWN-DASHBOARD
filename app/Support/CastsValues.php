@@ -55,12 +55,20 @@ trait CastsValues
                 ? Carbon::createFromTimestampMs((int) $v)
                 : Carbon::parse($v);
 
-            // A string with its own explicit offset already states a
-            // specific local day. Re-projecting it onto DATE_TIMEZONE is
-            // only correct if that offset agrees with DATE_TIMEZONE's
-            // current DST state — it doesn't always (see CloudTalkProvider,
-            // which passes false: CloudTalk's own offset is the account's
-            // ground truth there, not something to override).
+            // Always convert to DATE_TIMEZONE: a raw offset embedded in the
+            // source value (a "Z", a "+02:00", ...) states an instant, not
+            // necessarily the calendar day the business considers that
+            // instant to fall on. CloudTalk is the confirmed example — its
+            // API always wire-serializes in a fixed +02:00, but the
+            // account's real clock (matching both its dashboard and its own
+            // date_from/date_to filtering) is Africa/Cairo, DST included,
+            // proven by a call the dashboard showed as "Sep 9, 12:55 AM"
+            // whose raw answered_at was "...T23:55:37+02:00" the day
+            // before — only the Cairo conversion lands on that time.
+            // $convertToBusinessTz exists as an escape hatch for some future
+            // source that turns out to need the opposite; CloudTalkProvider
+            // tried that for exactly this field and it was wrong, so nothing
+            // currently calls date() with false.
             return $convertToBusinessTz
                 ? $carbon->setTimezone(self::DATE_TIMEZONE)->toDateString()
                 : $carbon->toDateString();

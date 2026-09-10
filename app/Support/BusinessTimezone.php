@@ -18,5 +18,5 @@ namespace App\Support;
  */
 final class BusinessTimezone
 {
-    public const NAME = 'UTC';
+    public const NAME = 'Africa/Cairo';
 }
