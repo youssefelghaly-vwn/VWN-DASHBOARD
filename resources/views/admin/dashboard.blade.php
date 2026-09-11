@@ -1536,8 +1536,12 @@ function dashboard(cfg) {
             const xy = ['scatter', 'bubble'].includes(c.type);
             let scales = {};
             if (!round) {
+                const xTicks = { font: { size: 10 }, maxRotation: 40, autoSkip: true };
+                if (xy) {
+                    xTicks.callback = (v) => c.labels[v] ?? '';
+                }
                 scales = {
-                    x: { stacked: c.stacked, grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 40, autoSkip: true, callback: xy ? (v) => c.labels[v] ?? '' : undefined } },
+                    x: { type: xy ? undefined : 'category', stacked: c.stacked, grid: { display: false }, ticks: xTicks },
                     y: { stacked: c.stacked, beginAtZero: true, grid: { color: '#EFEAD9' }, ticks: { font: { size: 10 } } },
                 };
             }

@@ -163,12 +163,30 @@ class DashboardData
             };
         }
 
-        arsort($reduced);
-        $reduced = array_slice($reduced, 0, $limit, true);
+        $rows2 = [];
+
+        foreach ($reduced as $label => $value) {
+            $rows2[] = ['label' => $label, 'value' => $value, 'date' => $this->cellDate($label)];
+        }
+
+        // A Date-grouped chart reads as a trend, so it belongs in chronological
+        // order — sorting by count (the useful default for "top N agents" etc.)
+        // would scramble it into a meaningless shape. Only kicks in when EVERY
+        // label parses as a date; one non-date label (e.g. a genuinely blank
+        // "Unspecified" bucket) falls back to the normal biggest-first order.
+        $allDates = array_filter(array_column($rows2, 'date'));
+
+        if ($rows2 && count($allDates) === count($rows2)) {
+            usort($rows2, fn ($a, $b) => $a['date'] <=> $b['date']);
+        } else {
+            usort($rows2, fn ($a, $b) => $b['value'] <=> $a['value']);
+        }
+
+        $rows2 = array_slice($rows2, 0, $limit);
 
         return [
-            'labels' => array_keys($reduced),
-            'values' => array_values($reduced),
+            'labels' => array_column($rows2, 'label'),
+            'values' => array_column($rows2, 'value'),
         ];
     }
 
