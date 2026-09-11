@@ -1,4 +1,6 @@
 <x-guest-layout>
+    <h1 class="display font-bold text-[20px] mb-6" style="color:var(--ink);">Set a new password</h1>
+
     <form method="POST" action="{{ route('password.store') }}">
         @csrf
 
@@ -30,7 +32,7 @@
             <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
         </div>
 
-        <div class="flex items-center justify-end mt-4">
+        <div class="flex items-center justify-end mt-5">
             <x-primary-button>
                 {{ __('Reset Password') }}
             </x-primary-button>

@@ -5,26 +5,34 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'Laravel') }}</title>
+        <title>{{ config('app.name', 'Outreach Command') }}</title>
 
-        <!-- Fonts -->
-        <link rel="preconnect" href="https://fonts.bunny.net">
-        <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-        <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="font-sans text-gray-900 antialiased">
-        <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gray-100 dark:bg-gray-900">
-            <div>
-                <a href="/">
-                    <x-application-logo class="w-20 h-20 fill-current text-gray-500" />
-                </a>
-            </div>
+    <body class="antialiased" style="background:var(--bg);">
+        <div class="min-h-screen flex flex-col items-center justify-center px-4 py-10 relative overflow-hidden">
 
-            <div class="w-full sm:max-w-md mt-6 px-6 py-4 bg-white dark:bg-gray-800 shadow-md overflow-hidden sm:rounded-lg">
+            {{-- A single restrained glow behind the card — the one bit of
+                 atmosphere on an otherwise still, dark page. --}}
+            <div class="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[560px] h-[560px] rounded-full"
+                 style="background:radial-gradient(circle, rgba(43,227,143,0.10) 0%, transparent 70%);"></div>
+
+            <a href="/" class="relative flex items-center gap-2.5 mb-8">
+                <img src="{{ asset('assets/logo.png') }}" class="w-[200px]" alt="">
+            </a>
+
+            <div class="relative w-full sm:max-w-md rounded-2xl px-7 py-7 sm:px-9 sm:py-8"
+                 style="background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--mint);box-shadow:0 0 0 1px rgba(43,227,143,0.06),0 24px 48px -20px rgba(0,0,0,0.55);">
                 {{ $slot }}
             </div>
+
+            <p class="relative mt-7 text-[11.5px] mono" style="color:var(--ink-soft);">
+                &copy; {{ date('Y') }} VWN — Dashboard
+            </p>
         </div>
     </body>
 </html>

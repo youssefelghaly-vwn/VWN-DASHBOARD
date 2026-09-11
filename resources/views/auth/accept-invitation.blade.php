@@ -1,9 +1,9 @@
 <x-guest-layout>
     <div class="mb-6">
-        <h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Set your password</h1>
-        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            You’re activating the account for
-            <span class="font-medium text-gray-900 dark:text-gray-100">{{ $user->email }}</span>.
+        <h1 class="display font-bold text-[20px]" style="color:var(--ink);">Set your password</h1>
+        <p class="mt-1.5 text-[13.5px]" style="color:var(--ink-soft);">
+            You're activating the account for
+            <span class="font-semibold mono" style="color:var(--ink);">{{ $user->email }}</span>.
         </p>
     </div>
 

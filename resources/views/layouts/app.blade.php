@@ -14,27 +14,6 @@
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
-    <style>
-        :root{
-            /* Outreach Command runs on a signal system, not decoration: every
-               hue below answers "is this good, worth watching, or wrong" —
-               green/amber/coral/blue map to answered/pending/missed/info
-               everywhere they appear, on a deep instrument-panel base. */
-            --bg:#0A0E14; --panel:#121826; --panel-alt:#1A2233;
-            --ink:#EDF1F7; --ink-soft:#8793A8; --line:#242E42;
-            --mint:#2BE38F; --mint-deep:#17B876; --amber:#FFB020; --coral:#FF5C72;
-            --sidebar:#070A0F; --sidebar-line:#1B2333;
-            --info:#4FA8E8;
-        }
-        body{background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
-        .display{font-family:'Space Grotesk',sans-serif;}
-        .mono{font-family:'IBM Plex Mono',monospace;}
-        [x-cloak]{display:none!important;}
-        @keyframes live-pulse{0%,100%{box-shadow:0 0 0 0 rgba(43,227,143,0.55);}50%{box-shadow:0 0 0 5px rgba(43,227,143,0);}}
-        .live-dot{animation:live-pulse 2s ease-in-out infinite;}
-        @media (prefers-reduced-motion: reduce){ .live-dot{animation:none;} }
-    </style>
-
     @stack('head')
 </head>
 <body class="min-h-screen">
@@ -54,16 +33,8 @@
            style="background:var(--sidebar);color:#EAF5F0;">
 
         <div class="hidden lg:flex items-center gap-2.5 mb-8">
-            <svg viewBox="0 0 100 100" class="w-8 h-8 shrink-0" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 8 C12 32 22 50 40 62 L28 76 C10 62 0 40 0 8 Z" fill="#2BE38F"/>
-                <path d="M46 62 C56 68 68 70 82 68 L82 92 C60 96 42 90 28 78 Z" fill="#2BE38F"/>
-            </svg>
-            <div>
-                <div class="display font-bold text-[19px] text-white tracking-wide">VWN</div>
-                <div class="text-[10.5px] uppercase tracking-[1.5px] mt-0.5" style="color:var(--mint);">
-                    Outreach Command
-                </div>
-            </div>
+                <img src="{{ asset('assets/logo.png') }}" class="w-[120px]" alt="">
+
         </div>
 
         <nav class="space-y-1">

@@ -1,3 +1,29 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ===================================================================
+   Outreach Command design tokens — the single source both app.blade.php
+   (main app shell) and guest.blade.php (auth pages) build on, so the two
+   never drift out of sync with each other.
+
+   Runs on a signal system, not decoration: every hue answers "is this
+   good, worth watching, or wrong" — green/amber/coral/blue map to
+   answered/pending/missed/info everywhere they appear, on a deep
+   instrument-panel base.
+   =================================================================== */
+:root{
+    --bg:#0A0E14; --panel:#121826; --panel-alt:#1A2233;
+    --ink:#EDF1F7; --ink-soft:#8793A8; --line:#242E42;
+    --mint:#2BE38F; --mint-deep:#17B876; --amber:#FFB020; --coral:#FF5C72;
+    --sidebar:#070A0F; --sidebar-line:#1B2333;
+    --info:#4FA8E8;
+}
+body{background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
+.display{font-family:'Space Grotesk',sans-serif;}
+.mono{font-family:'IBM Plex Mono',monospace;}
+[x-cloak]{display:none!important;}
+
+@keyframes live-pulse{0%,100%{box-shadow:0 0 0 0 rgba(43,227,143,0.55);}50%{box-shadow:0 0 0 5px rgba(43,227,143,0);}}
+.live-dot{animation:live-pulse 2s ease-in-out infinite;}
+@media (prefers-reduced-motion: reduce){ .live-dot{animation:none;} }
