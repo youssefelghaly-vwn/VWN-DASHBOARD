@@ -17,8 +17,8 @@ class DashboardData
     use FiltersRows;
 
     public const PALETTE = [
-        '#4FE3A6', '#EE9F4E', '#E2694F', '#7FA396',
-        '#2E9E76', '#C97A2A', '#8FBFAE', '#D98A6F',
+        '#2BE38F', '#4FA8E8', '#FFB020', '#FF5C72',
+        '#9B7EF0', '#17B876', '#5FD4D4', '#F2789A',
     ];
 
     private const TYPE_MAP = [

@@ -126,7 +126,7 @@
                                     <button @click="scrollToSection(top.id)"
                                         class="w-full text-left px-2.5 py-2 rounded-lg text-[13px] font-semibold transition"
                                         :style="tocActiveId === top.id ?
-                                            'background:rgba(79,227,166,0.12);color:var(--mint);' :
+                                            'background:rgba(43,227,143,0.14);color:var(--mint);' :
                                             'color:#EAF5F0;'"
                                         x-text="top.title"></button>
 
@@ -137,7 +137,7 @@
                                                 <button @click="scrollToSection(sub.id)"
                                                     class="w-full text-left px-2 py-1.5 rounded-lg text-[12px] transition"
                                                     :style="tocActiveId === sub.id ?
-                                                        'background:rgba(79,227,166,0.12);color:var(--mint);font-weight:600;' :
+                                                        'background:rgba(43,227,143,0.14);color:var(--mint);font-weight:600;' :
                                                         'color:#B9CCC4;'"
                                                     x-text="sub.title"></button>
                                             </template>
@@ -173,7 +173,7 @@
                     {{-- Freshness pill — auto-syncs every 5 minutes; label live-updates. --}}
                     <div class="flex items-center gap-2 mt-2 text-[11.5px]" style="color:var(--ink-soft);">
                         <span class="inline-flex items-center gap-1.5">
-                            <span class="inline-block w-1.5 h-1.5 rounded-full"
+                            <span class="inline-block w-1.5 h-1.5 rounded-full live-dot"
                                 style="background:var(--mint-deep);"></span>
                             Auto-syncs every 5 min
                         </span>
@@ -209,7 +209,7 @@
 
             <template x-if="!sources.length && !loading">
                 <div class="rounded-xl px-4 py-3 text-sm mb-6"
-                    style="background:rgba(238,159,78,0.12);border:1px solid var(--amber);color:#7A4A12;">
+                    style="background:rgba(255,176,32,0.12);border:1px solid var(--amber);color:var(--amber);">
                     No synced data yet — connect and sync an integration in
                     <a href="{{ route('admin.integrations.index') }}" class="underline font-semibold">Integrations</a>.
                 </div>
@@ -260,6 +260,8 @@
                     {{-- Section header (hr + title + controls). Ungrouped has none. --}}
                     <template x-if="g.type === 'section'">
                         <div class="flex items-center gap-3 mb-3" :class="g.level ? 'pl-5' : ''">
+                            <span class="inline-block rounded-full shrink-0"
+                                :style="g.level ? 'width:5px;height:5px;background:var(--ink-soft);' : 'width:7px;height:7px;background:var(--mint);box-shadow:0 0 8px rgba(43,227,143,0.6);'"></span>
                             <span class="display font-semibold whitespace-nowrap"
                                 :class="g.level ? 'text-[13px]' : 'text-base'"
                                 :style="g.level ? 'color:var(--ink-soft);' : ''" x-text="g.section.title"></span>
@@ -284,23 +286,20 @@
                     <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-4"
                         :class="g.level ? 'pl-5' : ''" x-show="metricsIn(g.sectionId).length">
                         <template x-for="m in metricsIn(g.sectionId)" :key="m.id">
-                            <div class="rounded-xl p-4 relative group"
-                                :style="m.accent ? 'background:var(--sidebar);border:1px solid var(--sidebar);' :
-                                    'background:var(--panel);border:1px solid var(--line);'">
+                            <div class="rounded-xl p-4 relative group transition"
+                                :style="'background:var(--panel);border:1px solid var(--line);' +
+                                    (m.accent ? 'border-top:3px solid var(--mint);box-shadow:0 0 0 1px rgba(43,227,143,0.08),0 8px 20px -12px rgba(43,227,143,0.35);' : '')">
                                 <div
                                     class="absolute top-2 right-2 flex items-center gap-0.5 opacity-0 group-hover:opacity-70 transition text-sm">
-                                    <button @click="moveWidget('metric', m.id, -1)"
-                                        :style="m.accent ? 'color:#fff;' : ''" title="Move earlier">‹</button>
-                                    <button @click="moveWidget('metric', m.id, 1)"
-                                        :style="m.accent ? 'color:#fff;' : ''" title="Move later">›</button>
-                                    <button @click="openMetric(m.id)" :style="m.accent ? 'color:#fff;' : ''"
-                                        title="Configure metric">⚙</button>
+                                    <button @click="moveWidget('metric', m.id, -1)" title="Move earlier">‹</button>
+                                    <button @click="moveWidget('metric', m.id, 1)" title="Move later">›</button>
+                                    <button @click="openMetric(m.id)" title="Configure metric">⚙</button>
                                 </div>
                                 <div class="text-[11px] uppercase tracking-wide mb-2.5 pr-12"
-                                    :style="m.accent ? 'color:#8FAFA3;' : 'color:var(--ink-soft);'" x-text="m.title">
+                                    style="color:var(--ink-soft);" x-text="m.title">
                                 </div>
                                 <div class="display text-[30px] font-bold leading-none"
-                                    :style="m.accent ? 'color:#fff;' : ''" x-text="m.display"></div>
+                                    :style="m.accent ? 'color:var(--mint);' : ''" x-text="m.display"></div>
                                 <div class="text-[11.5px] mt-2 font-semibold"
                                     :style="m.error ? 'color:var(--coral);' : (m.accent ? 'color:var(--mint);' :
                                         'color:var(--mint-deep);')"
@@ -1536,13 +1535,13 @@ function dashboard(cfg) {
             const xy = ['scatter', 'bubble'].includes(c.type);
             let scales = {};
             if (!round) {
-                const xTicks = { font: { size: 10 }, maxRotation: 40, autoSkip: true };
+                const xTicks = { font: { size: 10 }, color: '#8793A8', maxRotation: 40, autoSkip: true };
                 if (xy) {
                     xTicks.callback = (v) => c.labels[v] ?? '';
                 }
                 scales = {
                     x: { type: xy ? undefined : 'category', stacked: c.stacked, grid: { display: false }, ticks: xTicks },
-                    y: { stacked: c.stacked, beginAtZero: true, grid: { color: '#EFEAD9' }, ticks: { font: { size: 10 } } },
+                    y: { stacked: c.stacked, beginAtZero: true, grid: { color: '#1E2A3D' }, ticks: { font: { size: 10 }, color: '#8793A8' } },
                 };
             }
 
@@ -1552,7 +1551,7 @@ function dashboard(cfg) {
                 options: {
                     responsive: true, maintainAspectRatio: false, indexAxis: c.indexAxis,
                     plugins: {
-                        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } },
+                        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 }, color: '#8793A8' } },
                         tooltip: { intersect: false, mode: round || xy ? 'nearest' : 'index', callbacks: xy ? { label: (ctx) => `${c.labels[ctx.parsed.x] ?? ''}: ${ctx.parsed.y}` } : {} },
                     },
                     scales,

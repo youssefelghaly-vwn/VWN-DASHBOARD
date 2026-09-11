@@ -16,15 +16,23 @@
 
     <style>
         :root{
-            --bg:#F6F3EA; --panel:#FFFFFF; --panel-alt:#EFEAD9;
-            --ink:#12241F; --ink-soft:#5B6B64; --line:#DED6C0;
-            --mint:#4FE3A6; --mint-deep:#1C7A5C; --amber:#EE9F4E; --coral:#E2694F;
-            --sidebar:#0E211D; --sidebar-line:#1E3A33;
+            /* Outreach Command runs on a signal system, not decoration: every
+               hue below answers "is this good, worth watching, or wrong" —
+               green/amber/coral/blue map to answered/pending/missed/info
+               everywhere they appear, on a deep instrument-panel base. */
+            --bg:#0A0E14; --panel:#121826; --panel-alt:#1A2233;
+            --ink:#EDF1F7; --ink-soft:#8793A8; --line:#242E42;
+            --mint:#2BE38F; --mint-deep:#17B876; --amber:#FFB020; --coral:#FF5C72;
+            --sidebar:#070A0F; --sidebar-line:#1B2333;
+            --info:#4FA8E8;
         }
         body{background:var(--bg);color:var(--ink);font-family:'Inter',sans-serif;-webkit-font-smoothing:antialiased;}
         .display{font-family:'Space Grotesk',sans-serif;}
         .mono{font-family:'IBM Plex Mono',monospace;}
         [x-cloak]{display:none!important;}
+        @keyframes live-pulse{0%,100%{box-shadow:0 0 0 0 rgba(43,227,143,0.55);}50%{box-shadow:0 0 0 5px rgba(43,227,143,0);}}
+        .live-dot{animation:live-pulse 2s ease-in-out infinite;}
+        @media (prefers-reduced-motion: reduce){ .live-dot{animation:none;} }
     </style>
 
     @stack('head')
@@ -47,8 +55,8 @@
 
         <div class="hidden lg:flex items-center gap-2.5 mb-8">
             <svg viewBox="0 0 100 100" class="w-8 h-8 shrink-0" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 8 C12 32 22 50 40 62 L28 76 C10 62 0 40 0 8 Z" fill="#4FE3A6"/>
-                <path d="M46 62 C56 68 68 70 82 68 L82 92 C60 96 42 90 28 78 Z" fill="#4FE3A6"/>
+                <path d="M12 8 C12 32 22 50 40 62 L28 76 C10 62 0 40 0 8 Z" fill="#2BE38F"/>
+                <path d="M46 62 C56 68 68 70 82 68 L82 92 C60 96 42 90 28 78 Z" fill="#2BE38F"/>
             </svg>
             <div>
                 <div class="display font-bold text-[19px] text-white tracking-wide">VWN</div>
@@ -62,7 +70,7 @@
             {{-- Dashboards come from the DB-backed menu (no hardcoded routes). --}}
             <a href="{{ route('admin.dashboard') }}" @click="mobileNav = false"
                class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] transition"
-               style="{{ request()->routeIs('admin.dashboard') ? 'background:rgba(79,227,166,0.12);color:var(--mint);font-weight:600;' : 'color:#B9CCC4;' }}">
+               style="{{ request()->routeIs('admin.dashboard') ? 'background:rgba(43,227,143,0.14);color:var(--mint);font-weight:600;box-shadow:inset 3px 0 0 0 var(--mint);' : 'color:#B9CCC4;' }}">
                 <span class="text-base leading-none">▤</span><span>Dashboard</span>
             </a>
 
@@ -74,7 +82,7 @@
                 @if ($item->children->isEmpty())
                     <a href="{{ $item->href() }}" @click="mobileNav = false"
                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] transition"
-                       style="{{ $active ? 'background:rgba(79,227,166,0.12);color:var(--mint);font-weight:600;' : 'color:#B9CCC4;' }}">
+                       style="{{ $active ? 'background:rgba(43,227,143,0.14);color:var(--mint);font-weight:600;box-shadow:inset 3px 0 0 0 var(--mint);' : 'color:#B9CCC4;' }}">
                         <span class="text-base leading-none">◧</span><span>{{ $item->label }}</span>
                     </a>
                 @else
@@ -101,7 +109,7 @@
                                 @endphp
                                 <a href="{{ $child->href() }}" @click="mobileNav = false"
                                    class="flex items-center gap-2 px-3 py-2 rounded-lg text-[12.5px] transition"
-                                   style="{{ $childIsActive ? 'background:rgba(79,227,166,0.12);color:var(--mint);font-weight:600;' : 'color:#8FA79D;' }}">
+                                   style="{{ $childIsActive ? 'background:rgba(43,227,143,0.14);color:var(--mint);font-weight:600;box-shadow:inset 3px 0 0 0 var(--mint);' : 'color:#8FA79D;' }}">
                                     <span>{{ $child->label }}</span>
                                 </a>
                             @endforeach
@@ -124,7 +132,7 @@
                     @php $active = request()->routeIs($link['route'].'*'); @endphp
                     <a href="{{ route($link['route']) }}" @click="mobileNav = false"
                        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] transition"
-                       style="{{ $active ? 'background:rgba(79,227,166,0.12);color:var(--mint);font-weight:600;' : 'color:#B9CCC4;' }}">
+                       style="{{ $active ? 'background:rgba(43,227,143,0.14);color:var(--mint);font-weight:600;box-shadow:inset 3px 0 0 0 var(--mint);' : 'color:#B9CCC4;' }}">
                         <span class="text-base leading-none">{{ $link['icon'] }}</span><span>{{ $link['label'] }}</span>
                     </a>
                 @endforeach
