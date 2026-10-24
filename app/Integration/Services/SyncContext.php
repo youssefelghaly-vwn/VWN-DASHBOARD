@@ -6,6 +6,7 @@ use App\Integration\Models\Integration;
 use App\Integration\Models\IntegrationRecord;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Handed to a provider's sync(). It is the ONE place synced data is written to
@@ -27,6 +28,14 @@ class SyncContext
     private array $datasets = [];
 
     private ?string $lastError = null;
+
+    /**
+     * Errors are capped before they are logged or stored. A failed bulk insert's
+     * QueryException carries the full SQL with every bound payload (megabytes),
+     * and some APIs answer with whole HTML pages — stored raw, that overflowed
+     * sync_runs.last_error, failed the job, and filled failed_jobs.
+     */
+    private const MAX_ERROR_LENGTH = 1000;
 
     public function __construct(public readonly Integration $integration) {}
 
@@ -73,6 +82,8 @@ class SyncContext
     /** Record that a dataset failed to sync, keeping any previously synced rows. */
     public function fail(string $dataset, string $error): void
     {
+        $error = Str::limit($error, self::MAX_ERROR_LENGTH);
+
         Log::warning("Integration sync failed for {$dataset}", [
             'integration' => $this->integration->id,
             'provider' => $this->integration->provider,
