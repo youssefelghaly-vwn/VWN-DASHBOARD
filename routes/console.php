@@ -17,5 +17,8 @@ Schedule::command('queue:work --stop-when-empty --max-time=290 --tries=1 --sleep
     ->withoutOverlapping()
     ->runInBackground();
 
+// Safety net: failed jobs carry full exception traces, so never let them pile up.
+Schedule::command('queue:prune-failed --hours=48')->daily();
+
 
     
